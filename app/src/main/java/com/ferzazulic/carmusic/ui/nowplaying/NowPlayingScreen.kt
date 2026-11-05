@@ -93,10 +93,12 @@ class NowPlayingActions(
 @Composable
 fun NowPlayingScreen(pb: PlaybackUi, song: Song?, settings: AppSettings, actions: NowPlayingActions) {
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 20.dp)) {
-        val landscape = maxWidth > maxHeight
+        val w = maxWidth
+        val h = maxHeight
+        val landscape = w > h
         if (landscape) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                val artSize = minOf(maxHeight * 0.9f, maxWidth * 0.42f)
+                val artSize = minOf(h * 0.9f, w * 0.42f)
                 AnimatedArtwork(pb, song, artSize)
                 Spacer(Modifier.width(36.dp))
                 Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
@@ -105,7 +107,7 @@ fun NowPlayingScreen(pb: PlaybackUi, song: Song?, settings: AppSettings, actions
             }
         } else {
             Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                AnimatedArtwork(pb, song, minOf(maxWidth * 0.85f, maxHeight * 0.45f))
+                AnimatedArtwork(pb, song, minOf(w * 0.85f, h * 0.45f))
                 Spacer(Modifier.height(24.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.SpaceBetween) {
                     InfoPanel(pb, song, settings, actions)
