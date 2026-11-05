@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- CANable / candleLight (SLCAN firmware, STM32 CDC) -->
+    <usb-device vendor-id="1155" product-id="22336" />
+    <!-- FTDI based adapters (Lawicel CANUSB etc.) -->
+    <usb-device vendor-id="1027" />
+    <!-- CH340 / CH341 (Arduino + MCP2515 clones) -->
+    <usb-device vendor-id="6790" />
+    <!-- CP210x -->
+    <usb-device vendor-id="4292" />
+</resources>

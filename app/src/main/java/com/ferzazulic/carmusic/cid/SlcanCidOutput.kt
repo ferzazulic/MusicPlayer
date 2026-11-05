@@ -1,0 +1,99 @@
+package com.ferzazulic.carmusic.cid
+
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.hardware.usb.UsbManager
+import android.os.Build
+import com.ferzazulic.carmusic.settings.AppSettings
+import com.hoho.android.usbserial.driver.CdcAcmSerialDriver
+import com.hoho.android.usbserial.driver.ProbeTable
+import com.hoho.android.usbserial.driver.UsbSerialPort
+import com.hoho.android.usbserial.driver.UsbSerialProber
+import java.util.concurrent.Executors
+
+/**
+ * Writes now-playing text directly to the Astra H CID through a USB CAN adapter running SLCAN
+ * firmware (CANable, Lawicel CANUSB, Arduino + MCP2515 with slcan sketch) wired to MS-CAN.
+ */
+class SlcanCidOutput(private val context: Context, private val onStatus: (String) -> Unit) : CidOutput {
+    private val io = Executors.newSingleThreadExecutor()
+    private var port: UsbSerialPort? = null
+    private var openedBitrate = -1
+
+    private fun prober(): List<UsbSerialProber> {
+        val custom = ProbeTable().apply {
+            addProduct(0x0483, 0x5740, CdcAcmSerialDriver::class.java) // CANable slcan
+            addProduct(0x16D0, 0x117E, CdcAcmSerialDriver::class.java) // CANable 2 slcan
+            addProduct(0x2341, 0x0043, CdcAcmSerialDriver::class.java) // Arduino Uno
+        }
+        return listOf(UsbSerialProber.getDefaultProber(), UsbSerialProber(custom))
+    }
+
+    private fun ensureOpen(s: AppSettings): UsbSerialPort? {
+        port?.let { if (openedBitrate == s.cidSlcanBitrate) return it }
+        close()
+        val usb = context.getSystemService(Context.USB_SERVICE) as UsbManager
+        val driver = prober().firstNotNullOfOrNull { it.findAllDrivers(usb).firstOrNull() }
+        if (driver == null) {
+            onStatus("USB CAN adapter nije pronađen")
+            return null
+        }
+        if (!usb.hasPermission(driver.device)) {
+            val flags = if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
+            val pi = PendingIntent.getBroadcast(
+                context, 0, Intent("com.ferzazulic.carmusic.USB_PERMISSION").setPackage(context.packageName), flags,
+            )
+            usb.requestPermission(driver.device, pi)
+            onStatus("Čekam USB dozvolu…")
+            return null
+        }
+        val conn = usb.openDevice(driver.device) ?: run { onStatus("USB uređaj se ne može otvoriti"); return null }
+        return runCatching {
+            val p = driver.ports.first()
+            p.open(conn)
+            p.setParameters(115200, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            p.write("C\r".toByteArray(), 200)
+            p.write(AstraCidProtocol.bitrateCommand(s.cidSlcanBitrate).toByteArray(), 200)
+            p.write("O\r".toByteArray(), 200)
+            port = p
+            openedBitrate = s.cidSlcanBitrate
+            onStatus("Povezano: ${driver.device.productName ?: driver.device.deviceName}")
+            p
+        }.getOrElse {
+            onStatus("Greška: ${it.message}")
+            null
+        }
+    }
+
+    override fun show(info: NowPlayingInfo?, settings: AppSettings) = showText(CidFormatter.format(info, settings), settings)
+
+    fun showText(text: CidText, settings: AppSettings) {
+        io.execute {
+            val p = ensureOpen(settings) ?: return@execute
+            runCatching {
+                val frames = AstraCidProtocol.segment(AstraCidProtocol.buildTextPayload(text))
+                frames.forEachIndexed { i, f ->
+                    p.write(AstraCidProtocol.slcanFrame(settings.cidTxId, f).toByteArray(), 100)
+                    // After the first frame the display sends flow control on cidFcId; we use a
+                    // conservative fixed separation time instead of parsing it.
+                    Thread.sleep(if (i == 0) 20 else 3)
+                }
+            }.onFailure {
+                onStatus("Greška pri slanju: ${it.message}")
+                closeInternal()
+            }
+        }
+    }
+
+    private fun closeInternal() {
+        runCatching { port?.write("C\r".toByteArray(), 100) }
+        runCatching { port?.close() }
+        port = null
+        openedBitrate = -1
+    }
+
+    override fun close() {
+        io.execute { closeInternal() }
+    }
+}

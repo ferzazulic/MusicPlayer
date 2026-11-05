@@ -1,0 +1,2 @@
+-keep class com.hoho.android.usbserial.** { *; }
+-dontwarn com.google.errorprone.annotations.**
