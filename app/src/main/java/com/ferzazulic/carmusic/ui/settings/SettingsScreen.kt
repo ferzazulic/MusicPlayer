@@ -87,6 +87,7 @@ import com.ferzazulic.carmusic.ui.theme.CarThemes
 import com.ferzazulic.carmusic.ui.theme.LocalCarTheme
 import com.ferzazulic.carmusic.ui.theme.ProgressStyle
 import java.text.SimpleDateFormat
+import kotlinx.coroutines.launch
 import java.util.Date
 import java.util.Locale
 
@@ -472,6 +473,40 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
         )
         Spacer(Modifier.height(8.dp))
         Text(info, color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+    }
+    SettingsCard("Pretraga CAN kanala (dijagnostika)") {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        var running by remember { mutableStateOf(false) }
+        var result by remember { mutableStateOf<List<com.ferzazulic.carmusic.cid.SignalFinder.AppHits>?>(null) }
+        Text(
+            "Čita (ne mijenja) sistemske CAN i muzičke aplikacije head unita i izlistava nazive poruka kojima ugrađeni player " +
+                "šalje podatke CAN-boxu (npr. 'T362 00:28'). Pokreni i pošalji screenshotove liste.",
+            color = t.textMuted, style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(8.dp))
+        Chip(if (running) "Pretražujem…" else "Pokreni pretragu", running) {
+            if (!running) {
+                running = true
+                scope.launch {
+                    result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        com.ferzazulic.carmusic.cid.SignalFinder.scan(context)
+                    }
+                    running = false
+                }
+            }
+        }
+        result?.let { apps ->
+            Spacer(Modifier.height(10.dp))
+            if (apps.isEmpty()) Text("Nisu pronađene CAN/muzičke sistemske aplikacije.", color = t.text, style = MaterialTheme.typography.bodyMedium)
+            apps.forEach { app ->
+                Text("${app.label} (${app.pkg}) · ${app.hits.size}", color = t.accent, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 10.dp))
+                Text(
+                    app.hits.joinToString("\n").ifEmpty { "—" },
+                    color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace,
+                )
+            }
+        }
     }
     if (s.cidMode == CidMode.USB_SLCAN) {
         SettingsCard("Napredno (CAN)") {

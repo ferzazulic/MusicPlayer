@@ -11,6 +11,7 @@ import android.os.Build
  */
 object HeadUnitInfo {
     private val platformHints = listOf(
+        "com.hcn." to "HCN / Hengchen (Junsun i sl.) – CAN-box app com.hcn.autocan",
         "com.syu." to "FYT (UIS7862 / SC9853i…) – CAN-box app com.syu.canbus",
         "com.microntek" to "Microntek MTCD/MTCE (PX5/PX6)",
         "android.microntek" to "Microntek MTCD/MTCE (PX5/PX6)",
