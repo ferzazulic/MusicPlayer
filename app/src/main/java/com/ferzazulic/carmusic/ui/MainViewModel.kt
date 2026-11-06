@@ -43,6 +43,8 @@ data class PlaybackUi(
     /** +1 when moving forward in the queue, -1 when going back – drives slide animations. */
     val direction: Int = 1,
     val queueIds: List<Long> = emptyList(),
+    val nextIndex: Int = -1,
+    val prevIndex: Int = -1,
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -126,6 +128,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             count = c.mediaItemCount,
             direction = direction,
             queueIds = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it).mediaId.toLongOrNull() },
+            nextIndex = c.nextMediaItemIndex,
+            prevIndex = c.previousMediaItemIndex,
         )
     }
 

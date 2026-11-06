@@ -56,7 +56,10 @@ import com.ferzazulic.carmusic.ui.components.PlayPauseButton
 import com.ferzazulic.carmusic.ui.components.rememberArtwork
 import com.ferzazulic.carmusic.ui.library.LibraryScreen
 import com.ferzazulic.carmusic.ui.nowplaying.NowPlayingActions
-import com.ferzazulic.carmusic.ui.nowplaying.NowPlayingScreen
+import com.ferzazulic.carmusic.ui.layouts.AppShell
+import com.ferzazulic.carmusic.ui.layouts.FactoryNowPlaying
+import com.ferzazulic.carmusic.ui.layouts.PlayerModel
+import androidx.compose.runtime.remember
 import com.ferzazulic.carmusic.ui.settings.SettingsActions
 import com.ferzazulic.carmusic.ui.settings.SettingsScreen
 import com.ferzazulic.carmusic.ui.theme.LocalCarTheme
@@ -82,10 +85,36 @@ fun MainScreen(vm: MainViewModel) {
     val art = rememberArtwork(song, 512).value
     val glow = if (settings.artworkBackground) art?.let { Color(it.vibrant) } else null
 
+    val layout = t.base.layout
+    val queue = remember(pb.queueIds, library) { pb.queueIds.map { library.song(it) } }
+    val actions = NowPlayingActions(
+        vm::togglePlay, { vm.next() }, { vm.previous() }, vm::seekTo, { vm.seekBy(it) },
+        { vm.toggleShuffle() }, { vm.cycleRepeat() }, { vm.playQueueIndex(it) },
+    )
+
     CarBackground(glow = glow, playing = pb.isPlaying) {
-        Row(Modifier.fillMaxSize()) {
-            NavRail(screen) { screen = it }
-            Column(Modifier.weight(1f).fillMaxHeight()) {
+        // Changing to a theme with another layout cross-fades the whole frame.
+        AnimatedContent(
+            targetState = layout,
+            transitionSpec = { fadeIn(tween(t.duration(600))) togetherWith fadeOut(tween(t.duration(400))) },
+            label = "layout",
+        ) { currentLayout ->
+            AppShell(
+                layout = currentLayout,
+                screen = screen,
+                onSelect = { screen = it },
+                shuffle = pb.shuffle,
+                onShuffle = { vm.toggleShuffle() },
+                mini = {
+                    AnimatedVisibility(
+                        visible = screen != Screen.NOW_PLAYING && pb.songId != null,
+                        enter = slideInVertically(tween(t.duration(400))) { it } + fadeIn(),
+                        exit = slideOutVertically(tween(t.duration(300))) { it } + fadeOut(),
+                    ) {
+                        MiniPlayer(pb, song, onOpen = { screen = Screen.NOW_PLAYING }, onToggle = vm::togglePlay, onNext = { vm.next() })
+                    }
+                },
+            ) {
                 AnimatedContent(
                     targetState = screen,
                     transitionSpec = {
@@ -95,13 +124,10 @@ fun MainScreen(vm: MainViewModel) {
                             (fadeOut(tween(t.duration(220))) + scaleOut(tween(t.duration(300)), targetScale = 1.02f))
                     },
                     label = "screen",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxSize(),
                 ) { s ->
                     when (s) {
-                        Screen.NOW_PLAYING -> NowPlayingScreen(
-                            pb, song, settings,
-                            NowPlayingActions(vm::togglePlay, { vm.next() }, { vm.previous() }, vm::seekTo, { vm.seekBy(it) }, { vm.toggleShuffle() }, { vm.cycleRepeat() }),
-                        )
+                        Screen.NOW_PLAYING -> FactoryNowPlaying(currentLayout, PlayerModel(pb, song, queue, settings, actions))
                         Screen.LIBRARY -> LibraryScreen(
                             library, pb, settings.sortOrder, scanning,
                             onPlay = { list, i, shuffle -> vm.play(list, i, shuffle); if (!shuffle || i < 0) screen = Screen.NOW_PLAYING },
@@ -114,52 +140,6 @@ fun MainScreen(vm: MainViewModel) {
                         )
                     }
                 }
-                AnimatedVisibility(
-                    visible = screen != Screen.NOW_PLAYING && pb.songId != null,
-                    enter = slideInVertically(tween(t.duration(400))) { it } + fadeIn(),
-                    exit = slideOutVertically(tween(t.duration(300))) { it } + fadeOut(),
-                ) {
-                    MiniPlayer(pb, song, onOpen = { screen = Screen.NOW_PLAYING }, onToggle = vm::togglePlay, onNext = { vm.next() })
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NavRail(current: Screen, onSelect: (Screen) -> Unit) {
-    val t = LocalCarTheme.current
-    Column(
-        Modifier
-            .width(104.dp)
-            .fillMaxHeight()
-            .background(t.bgBottom.copy(alpha = 0.55f))
-            .padding(vertical = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Screen.entries.forEach { s ->
-            val active = s == current
-            val sel by animateFloatAsState(if (active) 1f else 0f, spring(dampingRatio = 0.6f), label = "rail")
-            Column(
-                Modifier
-                    .padding(vertical = 8.dp)
-                    .clip(RoundedCornerShape(t.corner + 6.dp))
-                    .clickable { onSelect(s) }
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Box(Modifier.size(width = 64.dp, height = 44.dp), contentAlignment = Alignment.Center) {
-                    Box(
-                        Modifier
-                            .matchParentSize()
-                            .graphicsLayer { scaleX = 0.6f + 0.4f * sel; alpha = sel.coerceIn(0f, 1f) }
-                            .clip(RoundedCornerShape(if (t.corner >= 8.dp) 22.dp else t.corner))
-                            .background(t.accent.copy(alpha = 0.22f)),
-                    )
-                    Icon(s.icon, s.label, tint = if (active) t.accent else t.textMuted, modifier = Modifier.size(32.dp))
-                }
-                Spacer(Modifier.height(4.dp))
-                Text(t.label(s.label), color = if (active) t.text else t.textMuted, style = MaterialTheme.typography.labelMedium)
             }
         }
     }

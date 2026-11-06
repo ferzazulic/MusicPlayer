@@ -62,6 +62,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -76,6 +79,7 @@ import com.ferzazulic.carmusic.ui.components.CarIconButton
 import com.ferzazulic.carmusic.ui.components.SpectrumBars
 import com.ferzazulic.carmusic.ui.components.formatTime
 import com.ferzazulic.carmusic.ui.theme.LocalCarTheme
+import com.ferzazulic.carmusic.ui.theme.PlayerLayout
 import kotlinx.coroutines.delay
 
 private data class Detail(val title: String, val subtitle: String, val songs: List<Song>)
@@ -285,13 +289,25 @@ private fun SongList(
 @Composable
 private fun SongRow(song: Song, current: Boolean, playing: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val t = LocalCarTheme.current
-    val bg by androidx.compose.animation.core.animateFloatAsState(if (current) 0.18f else 0f, tween(400), label = "rowBg")
+    val layout = t.base.layout
+    val listStyle = layout == PlayerLayout.MMI || layout == PlayerLayout.RNS
+    val bg by androidx.compose.animation.core.animateFloatAsState(if (current) 1f else 0f, tween(400), label = "rowBg")
+    val rowShape = if (listStyle) RoundedCornerShape(0.dp) else RoundedCornerShape(t.corner + 2.dp)
+    val highlight = if (layout == PlayerLayout.MMI) {
+        Brush.horizontalGradient(listOf(t.accent.copy(alpha = bg), t.accent.copy(alpha = 0.5f * bg), t.accent.copy(alpha = 0f)))
+    } else {
+        SolidColor(t.accent.copy(alpha = 0.18f * bg))
+    }
+    val onHighlight = layout == PlayerLayout.MMI && current
     Row(
         modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp)
-            .clip(RoundedCornerShape(t.corner + 2.dp))
-            .background(t.accent.copy(alpha = bg))
+            .padding(vertical = if (listStyle) 0.dp else 3.dp)
+            .clip(rowShape)
+            .background(highlight)
+            .drawBehind {
+                if (listStyle) drawLine(t.outline.copy(alpha = 0.6f), Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f), 1f)
+            }
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -306,8 +322,8 @@ private fun SongRow(song: Song, current: Boolean, playing: Boolean, modifier: Mo
         }
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text(song.title, color = if (current) t.accent else t.text, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${song.artist} · ${song.album}", color = t.textMuted, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(song.title, color = if (onHighlight) androidx.compose.ui.graphics.Color.White else if (current) t.accent else t.text, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("${song.artist} · ${song.album}", color = if (onHighlight) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f) else t.textMuted, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Text(formatTime(song.durationMs), color = t.textMuted, style = MaterialTheme.typography.labelLarge)
     }

@@ -8,6 +8,22 @@ enum class BgPattern { NONE, GRID, HONEYCOMB, LINES, DOTS, CHEVRON }
 enum class ProgressStyle { LINE, GLOW, SEGMENTED, THICK }
 enum class FontStyle { DEFAULT, CONDENSED, LIGHT }
 
+/**
+ * Complete screen layout (navigation + Now Playing composition) modelled on a family of factory units.
+ *  MIB     – VW/Škoda/SEAT MIB2: status bar, cover left, flat segmented control bar, bottom tab bar
+ *  RNS     – VW RNS 510 / RCD 510 / Opel CID: header bar, icon text lines, glossy soft-key row
+ *  MMI     – Audi MMI 3G / Porsche PCM 3: list-centric, highlighted track bar, four corner soft-keys
+ *  COCKPIT – Audi Virtual Cockpit / MIB3 / Enyaq: slim icon bar, centred cover-flow, minimal round keys
+ *  GAUGE   – GTI / R / RS / CUPRA sport view: tachometer-style progress ring, digital time readout
+ */
+enum class PlayerLayout(val title: String) {
+    MIB("MIB touchscreen"),
+    RNS("RNS soft-key"),
+    MMI("MMI lista"),
+    COCKPIT("Virtual cockpit"),
+    GAUGE("Sport gauge"),
+}
+
 data class CarTheme(
     val id: String,
     val name: String,
@@ -28,6 +44,7 @@ data class CarTheme(
     val font: FontStyle = FontStyle.DEFAULT,
     val uppercaseLabels: Boolean = false,
     val glow: Boolean = false,
+    val layout: PlayerLayout = PlayerLayout.MIB,
 )
 
 /**
@@ -42,6 +59,7 @@ object CarThemes {
             outline = Color(0xFF2E3846), text = Color(0xFFF2F5F9), textMuted = Color(0xFF8C97A6),
             accent = Color(0xFF4FA3FF), accentSecondary = Color(0xFFB9DAFF), corner = 6.dp,
             progress = ProgressStyle.LINE,
+            layout = PlayerLayout.MIB,
         ),
         CarTheme(
             id = "rns510", name = "RNS Navy", inspiredBy = "VW RNS 510 / RCD 510", group = "Volkswagen",
@@ -49,6 +67,7 @@ object CarThemes {
             outline = Color(0xFF2A5D91), text = Color(0xFFFFFFFF), textMuted = Color(0xFF9DBBD9),
             accent = Color(0xFF8FD0FF), accentSecondary = Color(0xFFFFFFFF), corner = 12.dp,
             pattern = BgPattern.GRID, progress = ProgressStyle.SEGMENTED, glow = true,
+            layout = PlayerLayout.RNS,
         ),
         CarTheme(
             id = "vw_gti", name = "GTI Red", inspiredBy = "VW Golf GTI performance", group = "Volkswagen",
@@ -57,6 +76,7 @@ object CarThemes {
             accent = Color(0xFFE2001A), accentSecondary = Color(0xFFFF5A5F), corner = 2.dp,
             pattern = BgPattern.HONEYCOMB, progress = ProgressStyle.THICK, font = FontStyle.CONDENSED,
             uppercaseLabels = true, glow = true,
+            layout = PlayerLayout.GAUGE,
         ),
         CarTheme(
             id = "vw_r", name = "R Blue", inspiredBy = "VW R performance", group = "Volkswagen",
@@ -65,6 +85,7 @@ object CarThemes {
             accent = Color(0xFF2D7FF9), accentSecondary = Color(0xFF6FA8FF), corner = 2.dp,
             pattern = BgPattern.CHEVRON, progress = ProgressStyle.GLOW, font = FontStyle.CONDENSED,
             uppercaseLabels = true, glow = true,
+            layout = PlayerLayout.GAUGE,
         ),
         CarTheme(
             id = "audi_mmi3g", name = "MMI Classic", inspiredBy = "Audi MMI 3G / 3G+", group = "Audi",
@@ -72,6 +93,7 @@ object CarThemes {
             outline = Color(0xFF3A3A3A), text = Color(0xFFE8E8E8), textMuted = Color(0xFF8A8A8A),
             accent = Color(0xFFCC0033), accentSecondary = Color(0xFFFFFFFF), corner = 0.dp,
             pattern = BgPattern.LINES, progress = ProgressStyle.LINE, font = FontStyle.CONDENSED, uppercaseLabels = true,
+            layout = PlayerLayout.MMI,
         ),
         CarTheme(
             id = "audi_vc", name = "Virtual Cockpit", inspiredBy = "Audi MMI Touch / Virtual Cockpit", group = "Audi",
@@ -79,6 +101,7 @@ object CarThemes {
             outline = Color(0xFF33373D), text = Color(0xFFFFFFFF), textMuted = Color(0xFF9097A0),
             accent = Color(0xFFF50537), accentSecondary = Color(0xFFB3B8BF), corner = 3.dp,
             progress = ProgressStyle.GLOW, font = FontStyle.LIGHT, glow = true,
+            layout = PlayerLayout.COCKPIT,
         ),
         CarTheme(
             id = "audi_rs", name = "RS Performance", inspiredBy = "Audi RS / Sport mode", group = "Audi",
@@ -87,6 +110,7 @@ object CarThemes {
             accent = Color(0xFFFF3B1F), accentSecondary = Color(0xFFFFA25C), corner = 0.dp,
             pattern = BgPattern.HONEYCOMB, progress = ProgressStyle.SEGMENTED, font = FontStyle.CONDENSED,
             uppercaseLabels = true, glow = true,
+            layout = PlayerLayout.GAUGE,
         ),
         CarTheme(
             id = "skoda_amundsen", name = "Amundsen Green", inspiredBy = "Škoda Amundsen / Columbus", group = "Škoda",
@@ -94,6 +118,7 @@ object CarThemes {
             outline = Color(0xFF274536), text = Color(0xFFF3FAF6), textMuted = Color(0xFF8FA99B),
             accent = Color(0xFF4BA82E), accentSecondary = Color(0xFF78FAAE), corner = 10.dp,
             pattern = BgPattern.DOTS, progress = ProgressStyle.LINE,
+            layout = PlayerLayout.MIB,
         ),
         CarTheme(
             id = "skoda_electric", name = "Electric Green", inspiredBy = "Škoda Enyaq / new design", group = "Škoda",
@@ -101,6 +126,7 @@ object CarThemes {
             outline = Color(0xFF1F5A4D), text = Color(0xFFFFFFFF), textMuted = Color(0xFF9CC4B8),
             accent = Color(0xFF78FAAE), accentSecondary = Color(0xFF419468), corner = 16.dp,
             progress = ProgressStyle.GLOW, glow = true,
+            layout = PlayerLayout.COCKPIT,
         ),
         CarTheme(
             id = "seat_media", name = "Media System", inspiredBy = "SEAT Media System Plus", group = "SEAT / CUPRA",
@@ -108,6 +134,7 @@ object CarThemes {
             outline = Color(0xFF3D3530), text = Color(0xFFF7F4F2), textMuted = Color(0xFF9E958F),
             accent = Color(0xFFE8601C), accentSecondary = Color(0xFFFFA06A), corner = 8.dp,
             progress = ProgressStyle.THICK,
+            layout = PlayerLayout.MIB,
         ),
         CarTheme(
             id = "cupra", name = "Copper", inspiredBy = "CUPRA", group = "SEAT / CUPRA",
@@ -116,6 +143,7 @@ object CarThemes {
             accent = Color(0xFFC1875A), accentSecondary = Color(0xFFE5B48A), corner = 0.dp,
             pattern = BgPattern.CHEVRON, progress = ProgressStyle.GLOW, font = FontStyle.CONDENSED,
             uppercaseLabels = true, glow = true,
+            layout = PlayerLayout.GAUGE,
         ),
         CarTheme(
             id = "porsche_pcm", name = "PCM", inspiredBy = "Porsche Communication Management", group = "Porsche",
@@ -123,6 +151,7 @@ object CarThemes {
             outline = Color(0xFF35373C), text = Color(0xFFFFFFFF), textMuted = Color(0xFF96979C),
             accent = Color(0xFFD5001C), accentSecondary = Color(0xFFC9A96E), corner = 4.dp,
             progress = ProgressStyle.LINE, font = FontStyle.LIGHT,
+            layout = PlayerLayout.MMI,
         ),
         CarTheme(
             id = "opel_cid", name = "Astra CID", inspiredBy = "Opel Astra H colour display (bonus)", group = "Bonus",
@@ -130,6 +159,7 @@ object CarThemes {
             outline = Color(0xFF2B4F94), text = Color(0xFFFFFFFF), textMuted = Color(0xFFA6B9DE),
             accent = Color(0xFFFFB627), accentSecondary = Color(0xFFFFFFFF), corner = 8.dp,
             pattern = BgPattern.GRID, progress = ProgressStyle.SEGMENTED,
+            layout = PlayerLayout.RNS,
         ),
         CarTheme(
             id = "midnight", name = "Midnight", inspiredBy = "CarMusic originalna tema", group = "Bonus",
@@ -137,6 +167,7 @@ object CarThemes {
             outline = Color(0xFF332C55), text = Color(0xFFFFFFFF), textMuted = Color(0xFF9D96BA),
             accent = Color(0xFF8B5CF6), accentSecondary = Color(0xFF22D3EE), corner = 22.dp,
             progress = ProgressStyle.GLOW, glow = true,
+            layout = PlayerLayout.COCKPIT,
         ),
     )
 

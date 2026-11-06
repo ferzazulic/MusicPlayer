@@ -5,7 +5,9 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
+import androidx.annotation.OptIn
 import androidx.core.content.IntentCompat
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -27,6 +29,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+@OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
 
     private lateinit var exo: ExoPlayer
@@ -66,6 +69,7 @@ class PlaybackService : MediaSessionService() {
         session = MediaSession.Builder(this, player)
             .setCallback(SessionCallback())
             .setSessionActivity(activityIntent)
+            .setBitmapLoader(SongBitmapLoader(this))
             .build()
 
         effects.attach(exo.audioSessionId)
