@@ -55,7 +55,8 @@ data class AppSettings(
     val cidFcId: Int = 0x2C1,
     val cidEmulateRadio: Boolean = true,
     // HCN firmware media service (com.hcn.mediaservice)
-    val hcnClientName: String = "HMediaPlayer",
+    val hcnClientName: String = "music",
+    val hcnSetClientBinder: Boolean = false,
     val hcnTimeInSeconds: Boolean = false,
     val hcnPlayState: String = "play",
     val hcnPauseState: String = "pause",

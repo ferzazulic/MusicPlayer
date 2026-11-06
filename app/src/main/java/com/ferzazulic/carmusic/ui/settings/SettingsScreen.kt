@@ -675,7 +675,7 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
                     }
                 }
             }
-            Chip("6. Test povezivanja", false) { com.ferzazulic.carmusic.cid.HcnMediaClient.connect(context, clientName.trim()) }
+            Chip("6. Test povezivanja", false) { com.ferzazulic.carmusic.cid.HcnMediaClient.connect(context, clientName.trim(), false) }
             Chip("Podijeli kao tekst", false) {
                 val text = "== ANALIZA\n" + (analysis ?: "(nije pokrenuta)") + "\n\n== TEST POVEZIVANJA\n" + clientLog.joinToString("\n")
                 val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
@@ -706,7 +706,8 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
                     modifier = Modifier.width(220.dp).clip(RoundedCornerShape(t.corner)).background(t.surfaceHigh).padding(10.dp),
                 )
             }
-            Text("Ugrađeni player koristi \"HMediaPlayer\". Ako CID ne reaguje, probaj \"music\".", color = t.textMuted, style = MaterialTheme.typography.bodyMedium)
+            Text("Preporučeno: \"music\" (servis ga prihvata). \"HMediaPlayer\" je ime ugrađenog playera i servis ga može odbiti.", color = t.textMuted, style = MaterialTheme.typography.bodyMedium)
+            SettingSwitch("Pozovi setClientBinder prije prijave", "Kao ugrađeni player – isključeno jer je servis tada odbijao prijavu", s.hcnSetClientBinder) { v -> update { it.copy(hcnSetClientBinder = v) } }
             SettingSwitch("Vrijeme u sekundama", "Isključeno = milisekunde. Promijeni ako CID pokazuje pogrešno vrijeme.", s.hcnTimeInSeconds) { v -> update { it.copy(hcnTimeInSeconds = v) } }
             SettingChoice(
                 "Oznaka stanja (play / pause)", null,

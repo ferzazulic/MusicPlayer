@@ -61,7 +61,8 @@ class SettingsRepository(private val context: Context, scope: CoroutineScope) {
         val cidTx = intPreferencesKey("cid_tx")
         val cidFc = intPreferencesKey("cid_fc")
         val cidRadio = booleanPreferencesKey("cid_radio")
-        val hcnName = stringPreferencesKey("hcn_name")
+        val hcnName = stringPreferencesKey("hcn_name2")
+        val hcnBinder = booleanPreferencesKey("hcn_binder")
         val hcnSec = booleanPreferencesKey("hcn_sec")
         val hcnPlay = stringPreferencesKey("hcn_play")
         val hcnPause = stringPreferencesKey("hcn_pause")
@@ -133,6 +134,7 @@ class SettingsRepository(private val context: Context, scope: CoroutineScope) {
             cidFcId = this[K.cidFc] ?: d.cidFcId,
             cidEmulateRadio = this[K.cidRadio] ?: d.cidEmulateRadio,
             hcnClientName = this[K.hcnName] ?: d.hcnClientName,
+            hcnSetClientBinder = this[K.hcnBinder] ?: d.hcnSetClientBinder,
             hcnTimeInSeconds = this[K.hcnSec] ?: d.hcnTimeInSeconds,
             hcnPlayState = this[K.hcnPlay] ?: d.hcnPlayState,
             hcnPauseState = this[K.hcnPause] ?: d.hcnPauseState,
@@ -183,6 +185,7 @@ class SettingsRepository(private val context: Context, scope: CoroutineScope) {
         this[K.cidFc] = s.cidFcId
         this[K.cidRadio] = s.cidEmulateRadio
         this[K.hcnName] = s.hcnClientName
+        this[K.hcnBinder] = s.hcnSetClientBinder
         this[K.hcnSec] = s.hcnTimeInSeconds
         this[K.hcnPlay] = s.hcnPlayState
         this[K.hcnPause] = s.hcnPauseState

@@ -239,7 +239,12 @@ object AidlReader {
                         steps += st
                         if (targets.any { t -> st.endsWith(".$t") } && !st.contains("Stub")) hit = true
                     }
-                    if (!hit && methodName(mi) in setOf("updateMusicPlayInfo", "updateVideoPlayInfo", "attachMediaClient")) hit = true
+                    val impl = !hit && methodName(mi) in setOf("updateMusicPlayInfo", "updateVideoPlayInfo", "attachMediaClient") &&
+                        !cls.endsWith("Default;") && !cls.endsWith("Proxy;") && steps.isNotEmpty()
+                    if (impl) {
+                        out += "IMPL ${pretty(cls)}.${methodName(mi)}: " + steps.filter { !it.startsWith("lese") || true }.take(60).joinToString(" | ")
+                        continue
+                    }
                     if (hit && !cls.contains("\$Stub")) {
                         val compact = steps.filter { st -> st.startsWith("\"") || targets.any { t -> st.endsWith(".$t") } || st.contains("Parcel.") }
                         out += "${pretty(cls)}.${methodName(mi)}: " + compact.take(40).joinToString(" | ")

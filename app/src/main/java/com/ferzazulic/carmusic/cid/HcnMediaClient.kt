@@ -74,13 +74,16 @@ object HcnMediaClient {
     }
 
     /** Keeps CarMusic attached as a media client (used by the HCN CID output). */
-    fun ensureConnected(context: Context, clientName: String) {
+    fun ensureConnected(context: Context, clientName: String, useClientBinder: Boolean = false) {
         if (connecting) return
-        if (service != null && attachedName == clientName && service?.isBinderAlive == true) return
-        connect(context, clientName)
+        if (service != null && attachedName != null && service?.isBinderAlive == true) return
+        if (service != null && attachedName == null && attemptsWithoutAttach < 5) { attemptsWithoutAttach++; return }
+        attemptsWithoutAttach = 0
+        connect(context, clientName, useClientBinder)
     }
+    private var attemptsWithoutAttach = 0
 
-    fun connect(context: Context, clientName: String) {
+    fun connect(context: Context, clientName: String, useClientBinder: Boolean = false) {
         val c = context.applicationContext
         disconnect(c)
         connecting = true
@@ -91,7 +94,11 @@ object HcnMediaClient {
                 service = binder
                 connecting = false
                 log("Povezano: ${runCatching { binder.interfaceDescriptor }.getOrNull()}")
-                attach(clientName)
+                attach(clientName, useClientBinder)
+                if (attachedName == null && clientName != "music") {
+                    log("Ponovni pokušaj s imenom \"music\"…")
+                    attach("music", false)
+                }
             }
             override fun onServiceDisconnected(name: ComponentName) {
                 service = null
@@ -107,12 +114,12 @@ object HcnMediaClient {
         if (!ok) connecting = false
     }
 
-    private fun attach(name: String) {
+    private fun attach(name: String, useClientBinder: Boolean) {
         val s = service ?: return
         val data = Parcel.obtain()
         val reply = Parcel.obtain()
-        // Like the stock player: setClientBinder(token) first (transaction 1), then attachMediaClient.
-        runCatching {
+        // The stock player calls setClientBinder(token) first; optional, since it made the service reject us.
+        if (useClientBinder) runCatching {
             val d = Parcel.obtain(); val r = Parcel.obtain()
             try {
                 d.writeInterfaceToken(SERVICE)
@@ -129,7 +136,7 @@ object HcnMediaClient {
             val ok = s.transact(Binder.FIRST_CALL_TRANSACTION + 1, data, reply, 0)
             reply.readException()
             log("attachMediaClient(\"$name\") → ${if (ok) "OK" else "odbijeno"}")
-            if (ok) attachedName = name
+            if (ok) attachedName = name else onStatus("HCN servis je odbio prijavu \"$name\"")
         } catch (t: Throwable) {
             log("attachMediaClient greška: ${t.javaClass.simpleName}: ${t.message}")
         } finally {

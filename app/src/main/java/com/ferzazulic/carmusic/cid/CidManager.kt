@@ -76,7 +76,7 @@ class CidManager(private val context: Context, scope: CoroutineScope, private va
 
     private fun sendHcn(s: AppSettings) {
         HcnMediaClient.onStatus = { _status.value = it }
-        HcnMediaClient.ensureConnected(context, s.hcnClientName.ifBlank { "HMediaPlayer" })
+        HcnMediaClient.ensureConnected(context, s.hcnClientName.ifBlank { "music" }, s.hcnSetClientBinder)
         last?.let { HcnMediaClient.update(it, s.hcnTimeInSeconds, s.hcnPlayState, s.hcnPauseState) }
     }
 
