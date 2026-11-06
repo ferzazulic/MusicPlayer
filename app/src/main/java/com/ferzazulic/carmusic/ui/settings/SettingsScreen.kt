@@ -705,6 +705,34 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
             Text(it, color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, maxLines = 60)
         }
     }
+    SettingsCard("Test sistemskog izvora (sourceinfo)") {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val srcLog by com.ferzazulic.carmusic.cid.SourceInfoClient.log.collectAsState()
+        Text(
+            "Firmver bira trenutni audio izvor i iz njega CAN-box čita pjesmu za CID. Redom: 1) Prati izvor, " +
+                "2) pusti pjesmu u ugrađenom playeru pa se vrati, 3) pusti pjesmu u CarMusic-u i pritisni 'Postavi CarMusic kao izvor', " +
+                "4) pogledaj CID i pošalji dnevnik.",
+            color = t.textMuted, style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(8.dp))
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val c = com.ferzazulic.carmusic.cid.SourceInfoClient
+            Chip("Opis servisa", false) { Thread { c.describe() }.start() }
+            Chip("Prati izvor", false) { Thread { c.watch() }.start() }
+            Chip("Postavi CarMusic kao izvor", false) { Thread { c.requestSource(context.packageName) }.start() }
+            Chip("Pročitaj MusicInfo", false) { Thread { c.musicInfo() }.start() }
+            Chip("Podijeli kao tekst", false) {
+                val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(android.content.Intent.EXTRA_TEXT, srcLog.joinToString("\n"))
+                runCatching { context.startActivity(android.content.Intent.createChooser(send, "Podijeli").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            }
+            Chip("Obriši", false) { c.clear() }
+        }
+        if (srcLog.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(srcLog.takeLast(20).joinToString("\n"), color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+        }
+    }
     if (s.cidMode == CidMode.HCN_MEDIA) {
         SettingsCard("Napredno (HCN medijski servis)") {
             var name by remember(s.hcnClientName) { mutableStateOf(s.hcnClientName) }

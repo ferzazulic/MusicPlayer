@@ -89,7 +89,8 @@ object AidlReader {
                 ZipFile(jar).use { zip ->
                     java.util.Collections.list(zip.entries()).filter { it.name.matches(Regex("classes\\d*\\.dex")) }.forEach { e ->
                         val dex = Dex(zip.getInputStream(e).use { it.readBytes() })
-                        val dump = dex.classDump(prefix)
+                        dex.parcelLayout("Landroid/sourceservice/MusicInfo;")?.let { appendLine("== PARCEL android.sourceservice.MusicInfo (${jar.name})"); append(it) }
+                        val dump = if (prefix.isNotEmpty()) "" else dex.classDump(prefix)
                         if (dump.isNotBlank()) { found = true; appendLine("== ${jar.name}/${e.name}"); append(dump) }
                     }
                 }
