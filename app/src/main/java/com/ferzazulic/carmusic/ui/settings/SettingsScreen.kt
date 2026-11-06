@@ -480,11 +480,20 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         var running by remember { mutableStateOf(false) }
         var result by remember { mutableStateOf<com.ferzazulic.carmusic.cid.SignalFinder.Result?>(null) }
-        val listening by com.ferzazulic.carmusic.cid.SignalMonitor.running.collectAsState()
-        val log by com.ferzazulic.carmusic.cid.SignalMonitor.log.collectAsState()
+        // The monitor runs in its own process and writes to a file; poll it.
+        var listening by remember { mutableStateOf(com.ferzazulic.carmusic.cid.SignalMonitor.isRunning(context)) }
+        var log by remember { mutableStateOf(com.ferzazulic.carmusic.cid.SignalMonitor.read(context)) }
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            while (true) {
+                listening = com.ferzazulic.carmusic.cid.SignalMonitor.isRunning(context)
+                log = com.ferzazulic.carmusic.cid.SignalMonitor.read(context)
+                kotlinx.coroutines.delay(1000)
+            }
+        }
         Text(
             "1) Pokreni pretragu. 2) Pritisni 'Prisluškuj', pa otvori ugrađeni player i pusti pjesmu 20–30 s " +
-                "(dok CID pokazuje T… 00:..). 3) Vrati se ovdje i pošalji screenshot dnevnika ili 'Podijeli kao tekst'.",
+                "(dok CID pokazuje T… 00:..). Prisluškivanje radi u pozadini (notifikacija) i kad se CarMusic ugasi. " +
+                "3) Ponovo otvori CarMusic – dnevnik je sačuvan – i pošalji screenshot ili 'Podijeli kao tekst'.",
             color = t.textMuted, style = MaterialTheme.typography.bodyMedium,
         )
         Spacer(Modifier.height(8.dp))
@@ -504,6 +513,7 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
                 Chip(if (listening) "Prisluškujem… (stop)" else "2. Prisluškuj 3 min", listening) {
                     if (listening) com.ferzazulic.carmusic.cid.SignalMonitor.stop(context)
                     else com.ferzazulic.carmusic.cid.SignalMonitor.start(context, r.actions)
+                    listening = !listening
                 }
                 Chip("Podijeli kao tekst", false) {
                     val text = r.asText() + "\n\n== Dnevnik prisluškivanja\n" + log.joinToString("\n")

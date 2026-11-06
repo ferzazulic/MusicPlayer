@@ -1,61 +1,130 @@
 package com.ferzazulic.carmusic.cid
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.Handler
+import android.os.IBinder
 import android.os.Looper
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import com.ferzazulic.carmusic.R
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Listens for a limited time to the broadcast actions found by [SignalFinder] (plus common music
- * broadcasts) and records which ones the head unit's own player sends, with their extras.
+ * Records which broadcasts the head unit's own player sends (actions found by [SignalFinder]).
+ * Runs as a foreground service in its own process (":monitor") and writes every line to a file,
+ * so it keeps listening – and the log survives – even when the firmware closes CarMusic's main
+ * process as the stock player starts.
  */
 object SignalMonitor {
-    private val _log = MutableStateFlow<List<String>>(emptyList())
-    val log: StateFlow<List<String>> = _log
-    private val _running = MutableStateFlow(false)
-    val running: StateFlow<Boolean> = _running
-
-    private var receiver: BroadcastReceiver? = null
-    private val handler = Handler(Looper.getMainLooper())
+    private fun logFile(c: Context) = File(c.filesDir, "can_monitor.log")
+    private fun untilFile(c: Context) = File(c.filesDir, "can_monitor.until")
     private val fmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-    private val ignored = setOf("com.android.music.metachanged", "com.android.music.playstatechanged")
 
     fun start(context: Context, actions: List<String>, durationMs: Long = 180_000) {
-        stop(context)
-        val app = context.applicationContext
-        val filter = IntentFilter()
-        (actions + listOf("com.android.music.metachanged", "com.android.music.playstatechanged"))
-            .distinct().take(900).forEach { filter.addAction(it) }
-        val r = object : BroadcastReceiver() {
-            override fun onReceive(c: Context, intent: Intent) {
-                // Skip our own CarMusic broadcasts.
-                if (intent.action in ignored && intent.getStringExtra("package") == c.packageName) return
-                val extras = intent.extras?.let { b ->
-                    b.keySet().joinToString(", ") { k -> "$k=${runCatching { b.get(k) }.getOrNull()}".take(80) }
-                }.orEmpty()
-                val line = "${fmt.format(Date())}  ${intent.action}  {$extras}"
-                _log.value = (listOf(line) + _log.value).take(60)
-            }
-        }
-        ContextCompat.registerReceiver(app, r, filter, ContextCompat.RECEIVER_EXPORTED)
-        receiver = r
-        _log.value = listOf("${fmt.format(Date())}  Slušam ${filter.countActions()} kanala… pusti pjesmu u ugrađenom playeru.")
-        _running.value = true
-        handler.postDelayed({ stop(app) }, durationMs)
+        val c = context.applicationContext
+        logFile(c).writeText("")
+        untilFile(c).writeText((System.currentTimeMillis() + durationMs).toString())
+        val i = Intent(c, SignalMonitorService::class.java)
+            .putStringArrayListExtra(SignalMonitorService.EXTRA_ACTIONS, ArrayList(actions.take(900)))
+            .putExtra(SignalMonitorService.EXTRA_DURATION, durationMs)
+        ContextCompat.startForegroundService(c, i)
     }
 
     fun stop(context: Context) {
-        receiver?.let { runCatching { context.applicationContext.unregisterReceiver(it) } }
+        val c = context.applicationContext
+        untilFile(c).delete()
+        c.stopService(Intent(c, SignalMonitorService::class.java))
+    }
+
+    fun isRunning(context: Context): Boolean {
+        val until = runCatching { untilFile(context.applicationContext).readText().toLong() }.getOrNull() ?: return false
+        return System.currentTimeMillis() < until
+    }
+
+    /** Newest first. */
+    fun read(context: Context, max: Int = 60): List<String> =
+        runCatching { logFile(context.applicationContext).readLines() }.getOrDefault(emptyList())
+            .filter { it.isNotBlank() }.asReversed().take(max)
+
+    internal fun append(context: Context, text: String) {
+        runCatching { logFile(context.applicationContext).appendText("${fmt.format(Date())}  $text\n") }
+    }
+}
+
+class SignalMonitorService : Service() {
+    private var receiver: BroadcastReceiver? = null
+    private val handler = Handler(Looper.getMainLooper())
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startAsForeground()
+        val actions = intent?.getStringArrayListExtra(EXTRA_ACTIONS).orEmpty()
+        val duration = intent?.getLongExtra(EXTRA_DURATION, 180_000) ?: 180_000
+        receiver?.let { runCatching { unregisterReceiver(it) } }
+        val filter = IntentFilter()
+        (actions + listOf("com.android.music.metachanged", "com.android.music.playstatechanged"))
+            .distinct().forEach { filter.addAction(it) }
+        val r = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                if (i.getStringExtra("package") == packageName) return // our own broadcasts
+                val extras = i.extras?.let { b ->
+                    b.keySet().joinToString(", ") { k -> "$k=${runCatching { @Suppress("DEPRECATION") b.get(k) }.getOrNull()}".take(80) }
+                }.orEmpty()
+                SignalMonitor.append(c, "${i.action}  {$extras}")
+            }
+        }
+        ContextCompat.registerReceiver(this, r, filter, ContextCompat.RECEIVER_EXPORTED)
+        receiver = r
+        SignalMonitor.append(this, "Slušam ${filter.countActions()} kanala – pusti pjesmu u ugrađenom playeru.")
+        handler.removeCallbacksAndMessages(null)
+        handler.postDelayed({
+            SignalMonitor.append(this, "Prisluškivanje završeno.")
+            stopSelf()
+        }, duration)
+        return START_REDELIVER_INTENT
+    }
+
+    private fun startAsForeground() {
+        val nm = getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26) {
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, "CAN dijagnostika", NotificationManager.IMPORTANCE_LOW))
+        }
+        val n: Notification = androidx.core.app.NotificationCompat.Builder(this, CHANNEL)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("CarMusic prisluškuje CAN kanale")
+            .setContentText("Pusti pjesmu u ugrađenom playeru, pa se vrati u CarMusic.")
+            .setOngoing(true)
+            .build()
+        if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(ID, n)
+        }
+    }
+
+    override fun onDestroy() {
+        receiver?.let { runCatching { unregisterReceiver(it) } }
         receiver = null
         handler.removeCallbacksAndMessages(null)
-        _running.value = false
+        super.onDestroy()
+    }
+
+    companion object {
+        const val EXTRA_ACTIONS = "actions"
+        const val EXTRA_DURATION = "duration"
+        private const val CHANNEL = "can_monitor"
+        private const val ID = 4711
     }
 }
