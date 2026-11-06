@@ -107,6 +107,15 @@ object AidlReader {
                 }
             }
         }
+        runCatching {
+            val apk = context.packageManager.getApplicationInfo("com.hcn.mediaservice", 0).sourceDir
+            ZipFile(apk).use { zip ->
+                java.util.Collections.list(zip.entries()).filter { it.name.matches(Regex("classes\\d*\\.dex")) }.forEach { e ->
+                    val dex = Dex(zip.getInputStream(e).use { it.readBytes() })
+                    (dex.traceClasses("HMediaAgent") + dex.traceClasses("MediaClientObserver")).take(40).forEach { appendLine("== TRAG $it") }
+                }
+            }
+        }.onFailure { appendLine("trag greška: ${it.message}") }
         // system services the app can see by name
         val names = listOf("sourceservice", "sourceservices", "source", "hcnsource", "mcu", "canbus", "carservice")
         names.forEach { n -> appendLine("getSystemService(\"$n\") = ${runCatching { context.getSystemService(n)?.javaClass?.name }.getOrElse { "greška ${it.javaClass.simpleName}" }}") }
@@ -377,6 +386,25 @@ object AidlReader {
                 0x1F -> (arg != 0).toString()
                 else -> "?"
             }
+        }
+
+        /** Full step-by-step trace (strings, field reads, calls) of every method in classes whose name contains [fragment]. */
+        fun traceClasses(fragment: String, maxSteps: Int = 70): List<String> {
+            val out = ArrayList<String>()
+            for (c in 0 until classDefsSize) {
+                val o = classDefsOff + c * 32
+                val cls = type(buf.getInt(o))
+                if (!cls.contains(fragment)) continue
+                for ((mi, code) in methods(buf.getInt(o + 24))) {
+                    val steps = ArrayList<String>()
+                    trace(code, full = true) { st ->
+                        val t = st.replace("android.", "").replace("java.lang.", "").replace("com.hcn.mediaservice.", "")
+                        if (!t.startsWith("StringBuilder") && !t.contains("Logger") && !t.contains("Printer.")) steps += t
+                    }
+                    if (steps.isNotEmpty()) out += "${pretty(cls).substringAfterLast('.')}.${methodName(mi)}: " + steps.take(maxSteps).joinToString(" | ")
+                }
+            }
+            return out
         }
 
         fun interfaces(apk: String): List<Iface> {
