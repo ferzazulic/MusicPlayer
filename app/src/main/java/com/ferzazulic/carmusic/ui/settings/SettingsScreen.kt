@@ -636,7 +636,61 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
         res?.let { r ->
             Spacer(Modifier.height(8.dp))
             if (r.isEmpty()) Text("Nisu pronađeni interfejsi.", color = t.text, style = MaterialTheme.typography.bodyMedium)
-            Text(com.ferzazulic.carmusic.cid.AidlReader.asText(r), color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+            Text(com.ferzazulic.carmusic.cid.AidlReader.asText(r), color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, maxLines = 12)
+        }
+    }
+    SettingsCard("Analiza i test HCN medijskog servisa (eksperimentalno)") {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        var busy by remember { mutableStateOf(false) }
+        var analysis by remember { mutableStateOf<String?>(null) }
+        var clientName by remember { mutableStateOf("music") }
+        val clientLog by com.ferzazulic.carmusic.cid.HcnMediaClient.log.collectAsState()
+        Text(
+            "5) Analiza koda: format MusicInfo podataka i kako ugrađeni player poziva servis. " +
+                "6) Test povezivanja: CarMusic se prijavi medijskom servisu kao player i bilježi odgovor (ništa ne šalje na CID).",
+            color = t.textMuted, style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Ime klijenta: ", color = t.text, style = MaterialTheme.typography.titleMedium)
+            BasicTextField(
+                clientName, { clientName = it }, singleLine = true,
+                textStyle = MaterialTheme.typography.titleMedium.copy(color = t.text, fontFamily = FontFamily.Monospace),
+                cursorBrush = SolidColor(t.accent),
+                modifier = Modifier.weight(1f).clip(RoundedCornerShape(t.corner)).background(t.surfaceHigh).padding(10.dp),
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip(if (busy) "Analiziram…" else "5. Analiza koda", busy) {
+                if (!busy) {
+                    busy = true
+                    scope.launch {
+                        analysis = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.ferzazulic.carmusic.cid.AidlReader.analyze(context)
+                        }
+                        busy = false
+                    }
+                }
+            }
+            Chip("6. Test povezivanja", false) { com.ferzazulic.carmusic.cid.HcnMediaClient.connect(context, clientName.trim()) }
+            Chip("Podijeli kao tekst", false) {
+                val text = "== ANALIZA\n" + (analysis ?: "(nije pokrenuta)") + "\n\n== TEST POVEZIVANJA\n" + clientLog.joinToString("\n")
+                val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(android.content.Intent.EXTRA_TEXT, text)
+                runCatching { context.startActivity(android.content.Intent.createChooser(send, "Podijeli").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            }
+        }
+        if (clientLog.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("Test povezivanja", color = t.accent, style = MaterialTheme.typography.titleMedium)
+            Text(clientLog.joinToString("\n"), color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+        }
+        analysis?.let {
+            Spacer(Modifier.height(8.dp))
+            Text("Analiza koda", color = t.accent, style = MaterialTheme.typography.titleMedium)
+            Text(it, color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, maxLines = 40)
         }
     }
     if (s.cidMode == CidMode.USB_SLCAN) {

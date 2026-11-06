@@ -44,6 +44,37 @@ object AidlReader {
         }
     }
 
+    /**
+     * Code-level details needed to talk to the media service:
+     *  - field list and writeToParcel() order of the Parcelables (MusicInfo, MediaPlayInfo)
+     *  - every place in the stock player / media service that calls the key AIDL methods, with the
+     *    string constants used in that method (client names, event names).
+     */
+    fun analyze(context: Context): String = buildString {
+        val pkgs = listOf("com.hcn.AutoMediaPlayer", "com.hcn.mediaservice")
+        val parcelables = listOf(
+            "Lcom/hcn/mediaservice/data/MusicInfo;",
+            "Lcom/hcn/media/base/MediaPlayInfo;",
+        )
+        val calls = setOf("attachMediaClient", "setClientBinder", "updateMusicPlayInfo", "bindMediaClient", "scheduleTask", "setMediaCallback", "requestExecuteMusicApi")
+        val doneParcel = HashSet<String>()
+        for (pkg in pkgs) {
+            val apk = runCatching { context.packageManager.getApplicationInfo(pkg, 0).sourceDir }.getOrNull() ?: continue
+            runCatching {
+                ZipFile(apk).use { zip ->
+                    java.util.Collections.list(zip.entries()).filter { it.name.matches(Regex("classes\\d*\\.dex")) }.forEach { e ->
+                        val dex = Dex(zip.getInputStream(e).use { it.readBytes() })
+                        for (pc in parcelables) {
+                            if (pc in doneParcel) continue
+                            dex.parcelLayout(pc)?.let { appendLine("== PARCEL ${dex.pretty(pc)} ($pkg)"); append(it); doneParcel += pc }
+                        }
+                        dex.callSites(calls).forEach { appendLine("== POZIV ($pkg) $it") }
+                    }
+                }
+            }.onFailure { appendLine("greška $pkg: ${it.message}") }
+        }
+    }
+
     private class Dex(val b: ByteArray) {
         val buf: ByteBuffer = ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN)
         val stringIdsOff = buf.getInt(0x3C)
@@ -97,6 +128,124 @@ object AidlReader {
             t == "F" -> "float"; t == "D" -> "double"; t == "B" -> "byte"; t == "S" -> "short"; t == "C" -> "char"
             t.startsWith("L") -> t.substring(1, t.length - 1).replace('/', '.').removePrefix("java.lang.")
             else -> t
+        }
+
+        private fun unit(off: Int) = ushort(off)
+
+        /** Width of the instruction at [insns]+[i] in 16-bit code units. */
+        private fun width(insns: Int, i: Int): Int {
+            val u = unit(insns + i * 2)
+            val op = u and 0xFF
+            if (op == 0x00) {
+                return when (u) {
+                    0x0100 -> 4 + unit(insns + (i + 1) * 2) * 2
+                    0x0200 -> 2 + unit(insns + (i + 1) * 2) * 4
+                    0x0300 -> {
+                        val w = unit(insns + (i + 1) * 2)
+                        val n = buf.getInt(insns + (i + 2) * 2)
+                        4 + (n * w + 1) / 2
+                    }
+                    else -> 1
+                }
+            }
+            return when (op) {
+                0x01, 0x04, 0x07, in 0x0a..0x12, in 0x1d..0x1e, 0x21, 0x27, 0x28, in 0x3e..0x43, 0x73, in 0x79..0x8f, in 0xb0..0xcf, in 0xe3..0xf9 -> 1
+                0x02, 0x05, 0x08, 0x13, 0x15, 0x16, 0x19, 0x1a, 0x1c, 0x1f, 0x20, 0x22, 0x23, 0x29, in 0x2d..0x3d, in 0x44..0x6d, in 0x90..0xaf, in 0xd0..0xe2, 0xfe, 0xff -> 2
+                0x03, 0x06, 0x09, 0x14, 0x17, 0x1b, 0x24, 0x25, 0x26, 0x2a, 0x2b, 0x2c, in 0x6e..0x72, in 0x74..0x78, 0xfc, 0xfd -> 3
+                0xfa, 0xfb -> 4
+                0x18 -> 5
+                else -> 1
+            }
+        }
+
+        private fun fieldInfo(idx: Int): Pair<String, String> {
+            val o = fieldIdsOff + idx * 8
+            return string(buf.getInt(o + 4)) to pretty(type(ushort(o + 2)))
+        }
+
+        /** (methodIdx, codeOff) for all direct + virtual methods of a class. */
+        private fun methods(classDataOff: Int): List<Pair<Int, Int>> {
+            if (classDataOff == 0) return emptyList()
+            pos = classDataOff
+            val sf = uleb(); val inf = uleb(); val dm = uleb(); val vm = uleb()
+            repeat(sf + inf) { uleb(); uleb() }
+            val out = ArrayList<Pair<Int, Int>>()
+            var idx = 0
+            repeat(dm) { idx += uleb(); uleb(); out += idx to uleb() }
+            idx = 0
+            repeat(vm) { idx += uleb(); uleb(); out += idx to uleb() }
+            return out
+        }
+
+        private fun instanceFields(classDataOff: Int): List<Pair<String, String>> {
+            if (classDataOff == 0) return emptyList()
+            pos = classDataOff
+            val sf = uleb(); val inf = uleb(); uleb(); uleb()
+            repeat(sf) { uleb(); uleb() }
+            var idx = 0
+            val out = ArrayList<Pair<String, String>>()
+            repeat(inf) { idx += uleb(); uleb(); out += fieldInfo(idx) }
+            return out
+        }
+
+        /** Walks a method body and reports field reads, Parcel calls, other invokes and string constants. */
+        private fun trace(codeOff: Int, onStep: (String) -> Unit) {
+            if (codeOff == 0) return
+            val n = buf.getInt(codeOff + 12)
+            val insns = codeOff + 16
+            var i = 0
+            while (i < n) {
+                val op = unit(insns + i * 2) and 0xFF
+                when (op) {
+                    in 0x52..0x58 -> { val (name, t) = fieldInfo(unit(insns + (i + 1) * 2)); onStep("lese $name:$t") }
+                    0x1a -> onStep("\"" + string(unit(insns + (i + 1) * 2)) + "\"")
+                    0x1b -> onStep("\"" + string(buf.getInt(insns + (i + 1) * 2)) + "\"")
+                    in 0x6e..0x72, in 0x74..0x78 -> {
+                        val m = unit(insns + (i + 1) * 2)
+                        onStep("${pretty(methodClass(m)).substringAfterLast('.')}.${methodName(m)}")
+                    }
+                }
+                i += width(insns, i)
+            }
+        }
+
+        fun parcelLayout(desc: String): String? {
+            val def = (0 until classDefsSize).map { classDefsOff + it * 32 }.firstOrNull { type(buf.getInt(it)) == desc } ?: return null
+            val classData = buf.getInt(def + 24)
+            val sb = StringBuilder()
+            sb.appendLine("  polja: " + instanceFields(classData).joinToString(", ") { "${it.first}:${it.second}" })
+            methods(classData).forEach { (mi, code) ->
+                val name = methodName(mi)
+                if (name == "writeToParcel" || name == "readFromParcel" || (name == "<init>" && proto(mi).first.any { it.endsWith("Parcel") })) {
+                    val steps = ArrayList<String>()
+                    trace(code) { st -> if (st.startsWith("lese") || st.startsWith("Parcel.")) steps += st.removePrefix("lese ") }
+                    sb.appendLine("  $name: " + steps.joinToString(" → "))
+                }
+            }
+            return sb.toString()
+        }
+
+        fun callSites(targets: Set<String>): List<String> {
+            val out = ArrayList<String>()
+            for (c in 0 until classDefsSize) {
+                val o = classDefsOff + c * 32
+                val cls = type(buf.getInt(o))
+                if (!cls.startsWith("Lcom/hcn/")) continue
+                val classData = buf.getInt(o + 24)
+                for ((mi, code) in methods(classData)) {
+                    val steps = ArrayList<String>()
+                    var hit = false
+                    trace(code) { st ->
+                        steps += st
+                        if (targets.any { t -> st.endsWith(".$t") } && !st.contains("Stub")) hit = true
+                    }
+                    if (hit && !cls.contains("\$Stub")) {
+                        val compact = steps.filter { st -> st.startsWith("\"") || targets.any { t -> st.endsWith(".$t") } || st.contains("Parcel.") }
+                        out += "${pretty(cls)}.${methodName(mi)}: " + compact.take(40).joinToString(" | ")
+                    }
+                }
+            }
+            return out.take(40)
         }
 
         fun interfaces(apk: String): List<Iface> {
