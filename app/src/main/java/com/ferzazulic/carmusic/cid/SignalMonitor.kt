@@ -41,6 +41,17 @@ object SignalMonitor {
         ContextCompat.startForegroundService(c, i)
     }
 
+    /** Records the firmware audio source in the background (CarMusic does not need to be open). */
+    fun startSource(context: Context, durationMs: Long = 120_000) {
+        val c = context.applicationContext
+        logFile(c).writeText("")
+        untilFile(c).writeText((System.currentTimeMillis() + durationMs).toString())
+        val i = Intent(c, SignalMonitorService::class.java)
+            .putExtra(SignalMonitorService.EXTRA_MODE, "source")
+            .putExtra(SignalMonitorService.EXTRA_DURATION, durationMs)
+        ContextCompat.startForegroundService(c, i)
+    }
+
     fun stop(context: Context) {
         val c = context.applicationContext
         untilFile(c).delete()
@@ -70,8 +81,12 @@ class SignalMonitorService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startAsForeground()
-        val actions = intent?.getStringArrayListExtra(EXTRA_ACTIONS).orEmpty()
         val duration = intent?.getLongExtra(EXTRA_DURATION, 180_000) ?: 180_000
+        if (intent?.getStringExtra(EXTRA_MODE) == "source") {
+            recordSource(duration)
+            return START_NOT_STICKY
+        }
+        val actions = intent?.getStringArrayListExtra(EXTRA_ACTIONS).orEmpty()
         receiver?.let { runCatching { unregisterReceiver(it) } }
         val filter = IntentFilter()
         (actions + listOf("com.android.music.metachanged", "com.android.music.playstatechanged"))
@@ -94,6 +109,27 @@ class SignalMonitorService : Service() {
             stopSelf()
         }, duration)
         return START_REDELIVER_INTENT
+    }
+
+    /** Source recorder: ISourceCallback events + getMusicInfo every 2 s, written to the log file. */
+    private fun recordSource(duration: Long) {
+        val c = SourceInfoClient
+        c.sink = { SignalMonitor.append(this, it) }
+        SignalMonitor.append(this, "Snimam izvor – sada otvori ugrađeni player i pusti pjesmu.")
+        Thread {
+            c.describe()
+            c.watch()
+            val end = System.currentTimeMillis() + duration
+            var n = 0
+            while (System.currentTimeMillis() < end && SignalMonitor.isRunning(this)) {
+                c.musicInfo()
+                if (n++ % 5 == 0) c.props()
+                Thread.sleep(2_000)
+            }
+            SignalMonitor.append(this, "Snimanje izvora završeno.")
+            c.sink = null
+            handler.post { stopSelf() }
+        }.start()
     }
 
     private fun startAsForeground() {
@@ -124,6 +160,7 @@ class SignalMonitorService : Service() {
     companion object {
         const val EXTRA_ACTIONS = "actions"
         const val EXTRA_DURATION = "duration"
+        const val EXTRA_MODE = "mode"
         private const val CHANNEL = "can_monitor"
         private const val ID = 4711
     }

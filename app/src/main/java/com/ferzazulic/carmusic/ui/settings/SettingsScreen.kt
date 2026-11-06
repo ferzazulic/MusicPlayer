@@ -717,6 +717,7 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
         Spacer(Modifier.height(8.dp))
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val c = com.ferzazulic.carmusic.cid.SourceInfoClient
+            Chip("Snimi izvor u pozadini (2 min)", false) { com.ferzazulic.carmusic.cid.SignalMonitor.startSource(context) }
             Chip("Opis servisa", false) { Thread { c.describe() }.start() }
             Chip("Prati izvor", false) { Thread { c.watch() }.start() }
             Chip("Postavi CarMusic kao izvor", false) { Thread { c.requestSource(context.packageName) }.start() }
@@ -731,6 +732,24 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
         if (srcLog.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             Text(srcLog.takeLast(20).joinToString("\n"), color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+        }
+        // Background recording (written to file by the ":monitor" process)
+        var bgLog by remember { mutableStateOf(com.ferzazulic.carmusic.cid.SignalMonitor.read(context, 40)) }
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            while (true) {
+                bgLog = com.ferzazulic.carmusic.cid.SignalMonitor.read(context, 40)
+                kotlinx.coroutines.delay(1500)
+            }
+        }
+        if (bgLog.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("Pozadinsko snimanje (najnovije gore)", color = t.accent, style = MaterialTheme.typography.titleMedium)
+            Text(bgLog.joinToString("\n"), color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, maxLines = 40)
+            Chip("Podijeli pozadinski dnevnik", false) {
+                val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(android.content.Intent.EXTRA_TEXT, com.ferzazulic.carmusic.cid.SignalMonitor.read(context, 500).asReversed().joinToString("\n"))
+                runCatching { context.startActivity(android.content.Intent.createChooser(send, "Podijeli").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            }
         }
     }
     if (s.cidMode == CidMode.HCN_MEDIA) {

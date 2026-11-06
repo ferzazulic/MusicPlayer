@@ -28,7 +28,13 @@ object SourceInfoClient {
     private var registered = false
     var onSourceChanged: (String) -> Unit = {}
 
-    fun log(s: String) { _log.value = (_log.value + "${fmt.format(Date())}  $s").takeLast(50) }
+    /** Extra sink (used by the background recorder to write to the shared log file). */
+    @Volatile var sink: ((String) -> Unit)? = null
+
+    fun log(s: String) {
+        _log.value = (_log.value + "${fmt.format(Date())}  $s").takeLast(50)
+        sink?.invoke(s)
+    }
     fun clear() { _log.value = emptyList() }
 
     fun service(): IBinder? = runCatching {
