@@ -53,4 +53,12 @@ data class AppSettings(
     val cidSlcanBitrate: Int = 95, // kbit/s, Astra H MS-CAN = 95.2
     val cidTxId: Int = 0x6C1,
     val cidFcId: Int = 0x2C1,
+    val cidEmulateRadio: Boolean = true,
+
+    // Extras
+    val favorites: Set<String> = emptySet(),
+    val nightDim: Boolean = true,
+    val nightFrom: Int = 20,
+    val nightTo: Int = 6,
+    val swipeOnCover: Boolean = true,
 )

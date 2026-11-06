@@ -44,9 +44,8 @@ class CidManager(context: Context, scope: CoroutineScope, private val settings: 
                 delay(1_000)
                 val s = settings.settings.value
                 scroll++
-                if (s.cidMode == CidMode.USB_SLCAN && (scroll % 2 == 0 || s.cidLayout == CidLayout.SCROLLING)) {
-                    slcan.showText(CidFormatter.format(last, s, scroll), s)
-                }
+                // Re-send every second: the CAN-box / radio keeps overwriting the display.
+                if (s.cidMode == CidMode.USB_SLCAN) sendUsb(s)
                 _preview.value = CidFormatter.format(last, s, scroll)
             }
         }
@@ -64,16 +63,22 @@ class CidManager(context: Context, scope: CoroutineScope, private val settings: 
             CidMode.BROADCAST -> broadcast.show(last, s)
             CidMode.USB_SLCAN -> {
                 broadcast.show(last, s)
-                slcan.showText(CidFormatter.format(last, s, scroll), s)
+                sendUsb(s)
             }
         }
+    }
+
+    private fun sendUsb(s: AppSettings) {
+        val text = CidFormatter.format(last, s, scroll)
+        val info = last
+        slcan.send(text.line1, text.line2, info?.album ?: "", s)
     }
 
     fun sendTest() {
         val s = settings.settings.value
         val text = CidText("CarMusic test", "Astra H CID", "♪ OK")
         _preview.value = text
-        if (s.cidMode == CidMode.USB_SLCAN) slcan.showText(text, s)
+        if (s.cidMode == CidMode.USB_SLCAN) slcan.send(text.line1, text.line2, text.line3, s)
         else broadcast.show(NowPlayingInfo("CarMusic test", "Astra H CID", "Test", true, 0, 0, 1, 1), s)
     }
 }

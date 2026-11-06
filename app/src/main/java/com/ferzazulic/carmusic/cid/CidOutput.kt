@@ -28,7 +28,7 @@ object CidFormatter {
     fun format(info: NowPlayingInfo?, s: AppSettings, scrollOffset: Int = 0): CidText {
         if (info == null || info.title.isBlank()) return CidText("CarMusic", "", "")
         val icon = if (!s.cidShowPlayIcon) "" else if (info.isPlaying) "▶ " else "❙❙ "
-        val track = "${info.trackNumber}/${info.trackCount}  ${time(info.positionMs)}"
+        val track = info.album.ifBlank { "${info.trackNumber}/${info.trackCount}" }
         return when (s.cidLayout) {
             CidLayout.TITLE_ARTIST -> CidText(clip(icon + info.title), clip(info.artist), clip(track))
             CidLayout.ARTIST_TITLE -> CidText(clip(icon + info.artist), clip(info.title), clip(track))

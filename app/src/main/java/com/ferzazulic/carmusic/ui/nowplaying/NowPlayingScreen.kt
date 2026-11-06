@@ -89,6 +89,7 @@ class NowPlayingActions(
     val toggleShuffle: () -> Unit,
     val cycleRepeat: () -> Unit,
     val playIndex: (Int) -> Unit,
+    val toggleFavorite: () -> Unit = {},
 )
 
 @Composable

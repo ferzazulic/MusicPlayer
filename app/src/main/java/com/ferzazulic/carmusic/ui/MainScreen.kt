@@ -90,6 +90,7 @@ fun MainScreen(vm: MainViewModel) {
     val actions = NowPlayingActions(
         vm::togglePlay, { vm.next() }, { vm.previous() }, vm::seekTo, { vm.seekBy(it) },
         { vm.toggleShuffle() }, { vm.cycleRepeat() }, { vm.playQueueIndex(it) },
+        { vm.toggleFavorite(pb.songId) },
     )
 
     CarBackground(glow = glow, playing = pb.isPlaying) {
@@ -129,7 +130,7 @@ fun MainScreen(vm: MainViewModel) {
                     when (s) {
                         Screen.NOW_PLAYING -> FactoryNowPlaying(currentLayout, PlayerModel(pb, song, queue, settings, actions))
                         Screen.LIBRARY -> LibraryScreen(
-                            library, pb, settings.sortOrder, scanning,
+                            library, pb, settings.sortOrder, scanning, settings.favorites,
                             onPlay = { list, i, shuffle -> vm.play(list, i, shuffle); if (!shuffle || i < 0) screen = Screen.NOW_PLAYING },
                             onPlayQueueIndex = { vm.playQueueIndex(it) },
                             onRescan = vm::rescan,
@@ -142,7 +143,22 @@ fun MainScreen(vm: MainViewModel) {
                 }
             }
         }
+        NightDimOverlay(settings.nightDim, settings.nightFrom, settings.nightTo)
     }
+}
+
+@Composable
+private fun NightDimOverlay(enabled: Boolean, from: Int, to: Int) {
+    var hour by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+            kotlinx.coroutines.delay(60_000)
+        }
+    }
+    val night = enabled && if (from <= to) hour in from until to else (hour >= from || hour < to)
+    val alpha by animateFloatAsState(if (night) 0.38f else 0f, tween(2000), label = "night")
+    if (alpha > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = alpha)))
 }
 
 @Composable

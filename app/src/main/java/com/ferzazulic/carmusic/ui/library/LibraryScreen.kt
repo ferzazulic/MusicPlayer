@@ -84,7 +84,7 @@ import kotlinx.coroutines.delay
 
 private data class Detail(val title: String, val subtitle: String, val songs: List<Song>)
 
-private val tabs = listOf("Pjesme", "Albumi", "Izvođači", "Folderi", "Red")
+private val tabs = listOf("Pjesme", "Albumi", "Izvođači", "Folderi", "Omiljene", "Red")
 
 @Composable
 fun LibraryScreen(
@@ -92,6 +92,7 @@ fun LibraryScreen(
     pb: PlaybackUi,
     sort: SortOrder,
     scanning: Boolean,
+    favorites: Set<String>,
     onPlay: (List<Song>, Int, Boolean) -> Unit,
     onPlayQueueIndex: (Int) -> Unit,
     onRescan: () -> Unit,
@@ -153,6 +154,16 @@ fun LibraryScreen(
                     library.folders.map { Triple(it.name, it.path, it.songs) },
                     Icons.Rounded.Folder,
                 ) { (n, s, songs) -> detail = Detail(n, s, songs) }
+                currentTab == 4 -> {
+                    val favs = library.songs.filter { it.id.toString() in favorites }
+                    if (favs.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Dodaj pjesme u omiljene dodirom na srce na omotu.", color = t.textMuted, style = MaterialTheme.typography.titleMedium)
+                        }
+                    } else {
+                        SongList(favs, pb, header = { PlayAllHeader("${favs.size} omiljenih", favs, onPlay) }) { i -> onPlay(favs, i, false) }
+                    }
+                }
                 else -> {
                     val queue = pb.queueIds.mapNotNull { library.song(it) }
                     SongList(queue, pb, highlightIndex = pb.index, header = {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -63,6 +64,7 @@ class PlayerModel(
     val title get() = pb.title.ifBlank { "Ništa ne svira" }
     val artist get() = pb.artist.ifBlank { "Odaberi pjesmu iz biblioteke" }
     val remaining get() = (pb.durationMs - pb.positionMs).coerceAtLeast(0)
+    val isFavorite get() = song?.id?.toString()?.let { it in settings.favorites } == true
     val fraction get() = if (pb.durationMs > 0) (pb.positionMs.toFloat() / pb.durationMs).coerceIn(0f, 1f) else 0f
 }
 
@@ -81,23 +83,76 @@ fun FactoryNowPlaying(layout: PlayerLayout, m: PlayerModel) {
     }
 }
 
-/** Cover that slides in from the direction of travel through the queue. */
+/**
+ * Cover that slides in from the direction of travel through the queue. Swipe left/right on it to
+ * change track; the heart in the corner adds the song to favourites.
+ */
 @Composable
-private fun AnimatedCover(song: Song?, direction: Int, modifier: Modifier, shape: Shape? = null, size: Int = 720) {
+private fun AnimatedCover(m: PlayerModel, modifier: Modifier, shape: Shape? = null, artSize: Int = 720) {
     val t = LocalCarTheme.current
-    AnimatedContent(
-        targetState = song,
-        contentKey = { it?.id },
-        transitionSpec = {
-            if (!t.animate) fadeIn(tween(0)) togetherWith fadeOut(tween(0))
-            else (slideInHorizontally(tween(t.duration(480))) { w -> direction * w / 3 } + fadeIn(tween(t.duration(400))) +
-                scaleIn(tween(t.duration(480)), initialScale = 0.86f)) togetherWith
-                (slideOutHorizontally(tween(t.duration(480))) { w -> -direction * w / 3 } + fadeOut(tween(t.duration(260))) +
-                    scaleOut(tween(t.duration(480)), targetScale = 0.86f))
-        },
-        modifier = modifier,
-        label = "cover",
-    ) { s -> ArtworkImage(s, Modifier.fillMaxSize(), size = size, shape = shape) }
+    val direction = m.pb.direction
+    var drag by remember { mutableFloatStateOf(0f) }
+    val dragAnim by animateFloatAsState(drag, spring(dampingRatio = 0.7f), label = "coverDrag")
+    Box(
+        modifier
+            .graphicsLayer { translationX = dragAnim * 0.35f; rotationZ = dragAnim / 90f }
+            .pointerInput(m.settings.swipeOnCover) {
+                if (!m.settings.swipeOnCover) return@pointerInput
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        val threshold = size.width * 0.18f
+                        when {
+                            drag < -threshold -> m.a.next()
+                            drag > threshold -> m.a.previous()
+                        }
+                        drag = 0f
+                    },
+                    onDragCancel = { drag = 0f },
+                ) { change, amount ->
+                    change.consume()
+                    drag += amount
+                }
+            }
+    ) {
+        AnimatedContent(
+            targetState = m.song,
+            contentKey = { it?.id },
+            transitionSpec = {
+                if (!t.animate) fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                else (slideInHorizontally(tween(t.duration(480))) { w -> direction * w / 3 } + fadeIn(tween(t.duration(400))) +
+                    scaleIn(tween(t.duration(480)), initialScale = 0.86f)) togetherWith
+                    (slideOutHorizontally(tween(t.duration(480))) { w -> -direction * w / 3 } + fadeOut(tween(t.duration(260))) +
+                        scaleOut(tween(t.duration(480)), targetScale = 0.86f))
+            },
+            modifier = Modifier.fillMaxSize(),
+            label = "cover",
+        ) { s -> ArtworkImage(s, Modifier.fillMaxSize(), size = artSize, shape = shape) }
+        if (m.song != null && shape != CircleShape) {
+            FavoriteBadge(m.isFavorite, m.a.toggleFavorite, Modifier.align(Alignment.TopEnd).padding(8.dp))
+        }
+    }
+}
+
+@Composable
+fun FavoriteBadge(active: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val t = LocalCarTheme.current
+    val scale by animateFloatAsState(if (active) 1.15f else 1f, spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMedium), label = "fav")
+    Box(
+        modifier
+            .size(48.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.45f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            if (active) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+            if (active) "Ukloni iz omiljenih" else "Dodaj u omiljene",
+            tint = if (active) t.accent else Color.White,
+            modifier = Modifier.size(26.dp),
+        )
+    }
 }
 
 @Composable
@@ -123,7 +178,7 @@ private fun MibNowPlaying(m: PlayerModel) {
                 Modifier.fillMaxHeight().aspectRatio(1f)
                     .shadow(16.dp, RoundedCornerShape(t.corner))
                     .border(1.dp, t.outline, RoundedCornerShape(t.corner))
-            ) { AnimatedCover(m.song, pb.direction, Modifier.fillMaxSize()) }
+            ) { AnimatedCover(m, Modifier.fillMaxSize()) }
             Spacer(Modifier.width(32.dp))
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
                 Text(
@@ -212,7 +267,7 @@ private fun RnsNowPlaying(m: PlayerModel) {
                 Modifier.weight(1f).fillMaxWidth()
                     .border(2.dp, t.outline, RoundedCornerShape(t.corner))
                     .padding(4.dp)
-            ) { AnimatedCover(m.song, pb.direction, Modifier.fillMaxSize()) }
+            ) { AnimatedCover(m, Modifier.fillMaxSize()) }
             Spacer(Modifier.height(8.dp))
             Text(
                 if (pb.count > 0) "Pjesma ${pb.index + 1} od ${pb.count}" else "—",
@@ -307,7 +362,7 @@ private fun MmiNowPlaying(m: PlayerModel) {
         Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 Modifier.weight(1f).aspectRatio(1f).border(1.dp, t.text.copy(alpha = 0.35f))
-            ) { AnimatedCover(m.song, pb.direction, Modifier.fillMaxSize().padding(1.dp), shape = RoundedCornerShape(0.dp)) }
+            ) { AnimatedCover(m, Modifier.fillMaxSize().padding(1.dp), shape = RoundedCornerShape(0.dp)) }
             Spacer(Modifier.height(10.dp))
             Text(m.artist, color = t.text, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(pb.album, color = t.textMuted, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -397,7 +452,7 @@ private fun CockpitNowPlaying(m: PlayerModel) {
                         )
                     }
                     .shadow(24.dp, RoundedCornerShape(t.corner))
-            ) { AnimatedCover(m.song, pb.direction, Modifier.fillMaxSize()) }
+            ) { AnimatedCover(m, Modifier.fillMaxSize()) }
         }
         Spacer(Modifier.height(10.dp))
         MarqueeTitle(m.title, MaterialTheme.typography.headlineMedium, t.text, center = true)
@@ -565,7 +620,7 @@ private fun BoxWithConstraintsScope.Gauge(m: PlayerModel) {
         drawCircle(Color.White, stroke * 0.55f, tipO)
     }
     Box(Modifier.size(d * 0.6f).clip(CircleShape).border(2.dp, t.outline, CircleShape)) {
-        AnimatedCover(m.song, pb.direction, Modifier.fillMaxSize(), shape = CircleShape)
+        AnimatedCover(m, Modifier.fillMaxSize(), shape = CircleShape)
     }
 }
 

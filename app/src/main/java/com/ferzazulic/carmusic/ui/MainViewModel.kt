@@ -175,6 +175,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun toggleFavorite(id: Long?) {
+        if (id == null) return
+        val key = id.toString()
+        app.settings.update { it.copy(favorites = if (key in it.favorites) it.favorites - key else it.favorites + key) }
+    }
+
     fun updateSettings(transform: (AppSettings) -> AppSettings) = app.settings.update(transform)
     fun sendCidTest() = app.cid.sendTest()
 

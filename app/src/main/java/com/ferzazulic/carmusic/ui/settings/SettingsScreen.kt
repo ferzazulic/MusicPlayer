@@ -311,6 +311,14 @@ private fun DisplayPage(s: AppSettings, update: ((AppSettings) -> AppSettings) -
         SettingSwitch("Prikaži sat", null, s.showClock) { v -> update { it.copy(showClock = v) } }
         SettingSwitch("Ekran uvijek upaljen", "Sprječava gašenje ekrana dok je aplikacija otvorena", s.keepScreenOn) { v -> update { it.copy(keepScreenOn = v) } }
         SettingSwitch("Velike kontrole", "Veći tasteri i tekst – lakše dok voziš", s.largeControls) { v -> update { it.copy(largeControls = v) } }
+        SettingSwitch("Prevlačenje po omotu", "Prevuci omot lijevo/desno za sljedeću/prethodnu pjesmu", s.swipeOnCover) { v -> update { it.copy(swipeOnCover = v) } }
+    }
+    SettingsCard("Noćni način") {
+        SettingSwitch("Automatski zatamni ekran noću", "Manje bliještanja tokom noćne vožnje", s.nightDim) { v -> update { it.copy(nightDim = v) } }
+        if (s.nightDim) {
+            SettingSlider("Od", s.nightFrom.toFloat(), 0f..23f, steps = 22, label = { "${it.toInt()}:00" }) { v -> update { it.copy(nightFrom = v.toInt()) } }
+            SettingSlider("Do", s.nightTo.toFloat(), 0f..23f, steps = 22, label = { "${it.toInt()}:00" }) { v -> update { it.copy(nightTo = v.toInt()) } }
+        }
     }
 }
 
@@ -432,8 +440,8 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
         Text(
             when (s.cidMode) {
                 CidMode.OFF -> "Na CID se ne šalju podaci."
-                CidMode.BROADCAST -> "Šalje standardne 'metachanged' broadcaste i MediaSession podatke. Android head uniti za Astru H sa CAN-box dekoderom (Raise/Hiworld/Simple Soft) ih prosljeđuju na fabrički CID."
-                CidMode.USB_SLCAN -> "Direktno piše na MS-CAN (95,2 kbit/s, OBD pinovi 3 i 11) preko USB CAN adaptera sa SLCAN firmverom (npr. CANable). Protokol je rekonstruisan iz community istraživanja – testiraj dugmetom ispod."
+                CidMode.BROADCAST -> "Šalje standardne 'metachanged' broadcaste i MediaSession podatke. Radi samo ako firmver head unita/CAN-boxa prosljeđuje podatke iz drugih aplikacija. Ako CID i dalje pokazuje 'Welcome' i jačinu zvuka, tvoj CAN-box prikazuje samo ugrađeni player – koristi USB CAN adapter."
+                CidMode.USB_SLCAN -> "Direktno piše na MS-CAN (95,2 kbit/s, OBD pin 3 = CAN-H, pin 11 = CAN-L) preko USB CAN adaptera sa SLCAN firmverom (npr. Arduino + MCP2515 ili Lawicel). Šalje poruke kao fabrički radio (0x691 prisustvo, 0x6C1 tekst, čeka potvrdu na 0x2C1) svake sekunde, da nadjača CAN-box."
             },
             color = t.textMuted, style = MaterialTheme.typography.bodyMedium,
         )
@@ -455,6 +463,16 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
             Chip("Pošalji test poruku", false, actions.cidTest)
         }
     }
+    SettingsCard("Informacije o head unitu") {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val info = remember { com.ferzazulic.carmusic.cid.HeadUnitInfo.describe(context) }
+        Text(
+            "Pošalji screenshot ovog dijela – po platformi i CAN-box aplikaciji se vidi kako tvoj head unit šalje tekst na CID.",
+            color = t.textMuted, style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(info, color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+    }
     if (s.cidMode == CidMode.USB_SLCAN) {
         SettingsCard("Napredno (CAN)") {
             SettingChoice(
@@ -462,6 +480,10 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
                 listOf(95 to "95,2k (MS-CAN)", 100 to "100k", 125 to "125k"),
                 s.cidSlcanBitrate,
             ) { v -> update { it.copy(cidSlcanBitrate = v) } }
+            SettingSwitch(
+                "Emuliraj fabrički radio", "Šalje 'radio uključen' (0x691) – bez toga CID ignoriše audio tekst",
+                s.cidEmulateRadio,
+            ) { v -> update { it.copy(cidEmulateRadio = v) } }
             HexField("CAN ID poruke (radio → ekran)", s.cidTxId) { v -> update { it.copy(cidTxId = v) } }
             HexField("CAN ID flow-control (ekran → radio)", s.cidFcId) { v -> update { it.copy(cidFcId = v) } }
         }

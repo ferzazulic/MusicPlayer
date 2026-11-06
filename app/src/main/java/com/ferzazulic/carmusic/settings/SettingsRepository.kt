@@ -60,6 +60,12 @@ class SettingsRepository(private val context: Context, scope: CoroutineScope) {
         val cidBitrate = intPreferencesKey("cid_bitrate")
         val cidTx = intPreferencesKey("cid_tx")
         val cidFc = intPreferencesKey("cid_fc")
+        val cidRadio = booleanPreferencesKey("cid_radio")
+        val favorites = stringSetPreferencesKey("favorites")
+        val nightDim = booleanPreferencesKey("night_dim")
+        val nightFrom = intPreferencesKey("night_from")
+        val nightTo = intPreferencesKey("night_to")
+        val swipe = booleanPreferencesKey("swipe")
     }
 
     val settings: StateFlow<AppSettings> = context.dataStore.data
@@ -121,6 +127,12 @@ class SettingsRepository(private val context: Context, scope: CoroutineScope) {
             cidSlcanBitrate = this[K.cidBitrate] ?: d.cidSlcanBitrate,
             cidTxId = this[K.cidTx] ?: d.cidTxId,
             cidFcId = this[K.cidFc] ?: d.cidFcId,
+            cidEmulateRadio = this[K.cidRadio] ?: d.cidEmulateRadio,
+            favorites = this[K.favorites] ?: d.favorites,
+            nightDim = this[K.nightDim] ?: d.nightDim,
+            nightFrom = this[K.nightFrom] ?: d.nightFrom,
+            nightTo = this[K.nightTo] ?: d.nightTo,
+            swipeOnCover = this[K.swipe] ?: d.swipeOnCover,
         )
     }
 
@@ -161,5 +173,11 @@ class SettingsRepository(private val context: Context, scope: CoroutineScope) {
         this[K.cidBitrate] = s.cidSlcanBitrate
         this[K.cidTx] = s.cidTxId
         this[K.cidFc] = s.cidFcId
+        this[K.cidRadio] = s.cidEmulateRadio
+        this[K.favorites] = s.favorites
+        this[K.nightDim] = s.nightDim
+        this[K.nightFrom] = s.nightFrom
+        this[K.nightTo] = s.nightTo
+        this[K.swipe] = s.swipeOnCover
     }
 }

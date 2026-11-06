@@ -14,27 +14,31 @@ import java.util.concurrent.Executors
 
 /**
  * Writes now-playing text directly to the Astra H CID through a USB CAN adapter running SLCAN
- * firmware (CANable, Lawicel CANUSB, Arduino + MCP2515 with slcan sketch) wired to MS-CAN.
+ * firmware (CANable, Lawicel CANUSB, Arduino + MCP2515 slcan sketch) connected to MS-CAN.
  */
-class SlcanCidOutput(private val context: Context, private val onStatus: (String) -> Unit) : CidOutput {
+class SlcanCidOutput(private val context: Context, private val onStatus: (String) -> Unit) {
     private val io = Executors.newSingleThreadExecutor()
     private var port: UsbSerialPort? = null
     private var openedBitrate = -1
+    private var lastPresence = 0L
+    private var sent = 0
+    private var acked = 0
 
-    private fun prober(): List<UsbSerialProber> {
+    private fun probers(): List<UsbSerialProber> {
         val custom = ProbeTable().apply {
             addProduct(0x0483, 0x5740, CdcAcmSerialDriver::class.java) // CANable slcan
             addProduct(0x16D0, 0x117E, CdcAcmSerialDriver::class.java) // CANable 2 slcan
             addProduct(0x2341, 0x0043, CdcAcmSerialDriver::class.java) // Arduino Uno
+            addProduct(0x2341, 0x0001, CdcAcmSerialDriver::class.java) // Arduino Uno (old)
         }
         return listOf(UsbSerialProber.getDefaultProber(), UsbSerialProber(custom))
     }
 
     private fun ensureOpen(s: AppSettings): UsbSerialPort? {
         port?.let { if (openedBitrate == s.cidSlcanBitrate) return it }
-        close()
+        closeInternal()
         val usb = context.getSystemService(Context.USB_SERVICE) as UsbManager
-        val driver = prober().firstNotNullOfOrNull { it.findAllDrivers(usb).firstOrNull() }
+        val driver = probers().firstNotNullOfOrNull { it.findAllDrivers(usb).firstOrNull() }
         if (driver == null) {
             onStatus("USB CAN adapter nije pronađen")
             return null
@@ -53,6 +57,7 @@ class SlcanCidOutput(private val context: Context, private val onStatus: (String
             val p = driver.ports.first()
             p.open(conn)
             p.setParameters(115200, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            runCatching { p.setDTR(true); p.setRTS(true) }
             p.write("C\r".toByteArray(), 200)
             p.write(AstraCidProtocol.bitrateCommand(s.cidSlcanBitrate).toByteArray(), 200)
             p.write("O\r".toByteArray(), 200)
@@ -66,24 +71,55 @@ class SlcanCidOutput(private val context: Context, private val onStatus: (String
         }
     }
 
-    override fun show(info: NowPlayingInfo?, settings: AppSettings) = showText(CidFormatter.format(info, settings), settings)
-
-    fun showText(text: CidText, settings: AppSettings) {
+    fun send(title: String, artist: String, album: String, s: AppSettings) {
         io.execute {
-            val p = ensureOpen(settings) ?: return@execute
+            val p = ensureOpen(s) ?: return@execute
             runCatching {
-                val frames = AstraCidProtocol.segment(AstraCidProtocol.buildTextPayload(text))
-                frames.forEachIndexed { i, f ->
-                    p.write(AstraCidProtocol.slcanFrame(settings.cidTxId, f).toByteArray(), 100)
-                    // After the first frame the display sends flow control on cidFcId; we use a
-                    // conservative fixed separation time instead of parsing it.
-                    Thread.sleep(if (i == 0) 20 else 3)
+                val now = System.currentTimeMillis()
+                if (s.cidEmulateRadio && now - lastPresence > 2_000) {
+                    p.write(AstraCidProtocol.slcanFrame(AstraCidProtocol.ID_RADIO_PRESENCE, AstraCidProtocol.RADIO_PRESENCE).toByteArray(), 100)
+                    lastPresence = now
                 }
+                val frames = AstraCidProtocol.segment(AstraCidProtocol.buildTextPayload(title, artist, album, "MP3"))
+                drain(p)
+                p.write(AstraCidProtocol.slcanFrame(s.cidTxId, frames[0]).toByteArray(), 100)
+                sent++
+                if (frames.size > 1) {
+                    if (waitForFlowControl(p, s.cidFcId, 250)) acked++
+                    for (i in 1 until frames.size) {
+                        p.write(AstraCidProtocol.slcanFrame(s.cidTxId, frames[i]).toByteArray(), 100)
+                        Thread.sleep(2)
+                    }
+                }
+                onStatus("Šaljem na CID · potvrde ekrana: $acked/$sent")
             }.onFailure {
                 onStatus("Greška pri slanju: ${it.message}")
                 closeInternal()
             }
         }
+    }
+
+    private fun drain(p: UsbSerialPort) {
+        val buf = ByteArray(256)
+        runCatching { while (p.read(buf, 5) > 0) Unit }
+    }
+
+    /** Reads SLCAN lines until the display's flow-control frame arrives or the timeout expires. */
+    private fun waitForFlowControl(p: UsbSerialPort, fcId: Int, timeoutMs: Long): Boolean {
+        val end = System.currentTimeMillis() + timeoutMs
+        val sb = StringBuilder()
+        val buf = ByteArray(256)
+        while (System.currentTimeMillis() < end) {
+            val n = runCatching { p.read(buf, 20) }.getOrDefault(0)
+            for (i in 0 until n) {
+                val ch = buf[i].toInt().toChar()
+                if (ch == '\r' || ch == '\n') {
+                    if (AstraCidProtocol.isFlowControl(sb.toString(), fcId)) return true
+                    sb.clear()
+                } else sb.append(ch)
+            }
+        }
+        return false
     }
 
     private fun closeInternal() {
@@ -93,7 +129,7 @@ class SlcanCidOutput(private val context: Context, private val onStatus: (String
         openedBitrate = -1
     }
 
-    override fun close() {
+    fun close() {
         io.execute { closeInternal() }
     }
 }
