@@ -675,6 +675,17 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
                     }
                 }
             }
+            Chip(if (busy) "Čitam…" else "7. Sistemski sourceservice", busy) {
+                if (!busy) {
+                    busy = true
+                    scope.launch {
+                        analysis = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.ferzazulic.carmusic.cid.AidlReader.sourceService(context)
+                        }
+                        busy = false
+                    }
+                }
+            }
             Chip("6. Test povezivanja", false) { com.ferzazulic.carmusic.cid.HcnMediaClient.connect(context, clientName.trim(), false) }
             Chip("Podijeli kao tekst", false) {
                 val text = "== ANALIZA\n" + (analysis ?: "(nije pokrenuta)") + "\n\n== TEST POVEZIVANJA\n" + clientLog.joinToString("\n")
@@ -691,7 +702,7 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
         analysis?.let {
             Spacer(Modifier.height(8.dp))
             Text("Analiza koda", color = t.accent, style = MaterialTheme.typography.titleMedium)
-            Text(it, color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, maxLines = 40)
+            Text(it, color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, maxLines = 60)
         }
     }
     if (s.cidMode == CidMode.HCN_MEDIA) {

@@ -75,6 +75,50 @@ object AidlReader {
         }
     }
 
+    /**
+     * The firmware's system "sourceservice" (android.sourceservice.* in framework.jar): its classes,
+     * method signatures and constants, plus what the stock player and the CAN app call on it.
+     */
+    fun sourceService(context: Context): String = buildString {
+        val prefix = "Landroid/sourceservice"
+        val jars = java.io.File("/system/framework").listFiles { f -> f.name.endsWith(".jar") }.orEmpty()
+            .sortedBy { if (it.name == "framework.jar") 0 else 1 }
+        var found = false
+        for (jar in jars) {
+            runCatching {
+                ZipFile(jar).use { zip ->
+                    java.util.Collections.list(zip.entries()).filter { it.name.matches(Regex("classes\\d*\\.dex")) }.forEach { e ->
+                        val dex = Dex(zip.getInputStream(e).use { it.readBytes() })
+                        val dump = dex.classDump(prefix)
+                        if (dump.isNotBlank()) { found = true; appendLine("== ${jar.name}/${e.name}"); append(dump) }
+                    }
+                }
+            }
+        }
+        if (!found) appendLine("android.sourceservice nije pronađen u /system/framework (${jars.size} jar fajlova)")
+        for (pkg in listOf("com.hcn.AutoMediaPlayer", "com.hcn.autocan", "com.hcn.mediaservice", "com.hcn.autosource")) {
+            val apk = runCatching { context.packageManager.getApplicationInfo(pkg, 0).sourceDir }.getOrNull() ?: continue
+            runCatching {
+                ZipFile(apk).use { zip ->
+                    java.util.Collections.list(zip.entries()).filter { it.name.matches(Regex("classes\\d*\\.dex")) }.forEach { e ->
+                        Dex(zip.getInputStream(e).use { it.readBytes() }).callersOf(prefix).forEach { appendLine("== KORISTI ($pkg) $it") }
+                    }
+                }
+            }
+        }
+        // system services the app can see by name
+        val names = listOf("sourceservice", "sourceservices", "source", "hcnsource", "mcu", "canbus", "carservice")
+        names.forEach { n -> appendLine("getSystemService(\"$n\") = ${runCatching { context.getSystemService(n)?.javaClass?.name }.getOrElse { "greška ${it.javaClass.simpleName}" }}") }
+        runCatching {
+            val sm = Class.forName("android.os.ServiceManager")
+            @Suppress("UNCHECKED_CAST")
+            val list = (sm.getMethod("listServices").invoke(null) as Array<String>).filter { s ->
+                val l = s.lowercase(); listOf("source", "hcn", "mcu", "can", "media").any { l.contains(it) }
+            }
+            appendLine("ServiceManager: " + list.joinToString(", "))
+        }.onFailure { appendLine("ServiceManager.listServices nedostupan: ${it.javaClass.simpleName}") }
+    }
+
     private class Dex(val b: ByteArray) {
         val buf: ByteBuffer = ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN)
         val stringIdsOff = buf.getInt(0x3C)
@@ -189,7 +233,7 @@ object AidlReader {
         }
 
         /** Walks a method body and reports field reads, Parcel calls, other invokes and string constants. */
-        private fun trace(codeOff: Int, onStep: (String) -> Unit) {
+        private fun trace(codeOff: Int, full: Boolean = false, onStep: (String) -> Unit) {
             if (codeOff == 0) return
             val n = buf.getInt(codeOff + 12)
             val insns = codeOff + 16
@@ -202,7 +246,8 @@ object AidlReader {
                     0x1b -> onStep("\"" + string(buf.getInt(insns + (i + 1) * 2)) + "\"")
                     in 0x6e..0x72, in 0x74..0x78 -> {
                         val m = unit(insns + (i + 1) * 2)
-                        onStep("${pretty(methodClass(m)).substringAfterLast('.')}.${methodName(m)}")
+                        val cn = pretty(methodClass(m))
+                        onStep("${if (full) cn else cn.substringAfterLast('.')}.${methodName(m)}")
                     }
                 }
                 i += width(insns, i)
@@ -252,6 +297,85 @@ object AidlReader {
                 }
             }
             return out.take(40)
+        }
+
+        /** Methods (with signatures) and static constants of every class whose descriptor starts with [prefix]. */
+        fun classDump(prefix: String): String {
+            val sb = StringBuilder()
+            for (c in 0 until classDefsSize) {
+                val o = classDefsOff + c * 32
+                val desc = type(buf.getInt(o))
+                if (!desc.startsWith(prefix)) continue
+                val classData = buf.getInt(o + 24)
+                val staticOff = buf.getInt(o + 28)
+                sb.appendLine("class ${pretty(desc)}")
+                // static fields + values
+                if (classData != 0) {
+                    pos = classData
+                    val sf = uleb(); uleb(); uleb(); uleb()
+                    val fields = ArrayList<Int>()
+                    var idx = 0
+                    repeat(sf) { idx += uleb(); uleb(); fields += idx }
+                    val values = ArrayList<String>()
+                    if (staticOff != 0) {
+                        pos = staticOff
+                        val n = uleb()
+                        repeat(n) { values += valueText() }
+                    }
+                    fields.forEachIndexed { i, f ->
+                        val (name, t) = fieldInfo(f)
+                        sb.appendLine("  const $t $name = ${values.getOrNull(i) ?: "?"}")
+                    }
+                }
+                methods(classData).forEach { (mi, _) ->
+                    val (params, ret) = proto(mi)
+                    sb.appendLine("  $ret ${methodName(mi)}(${params.joinToString(", ")})")
+                }
+            }
+            return sb.toString()
+        }
+
+        /** Every com.hcn method that calls into a class whose descriptor starts with [prefix]. */
+        fun callersOf(prefix: String): List<String> {
+            val target = pretty(prefix.removeSuffix("/") + ";").removeSuffix(";")
+            val out = ArrayList<String>()
+            for (c in 0 until classDefsSize) {
+                val o = classDefsOff + c * 32
+                val cls = type(buf.getInt(o))
+                if (!cls.startsWith("Lcom/hcn/")) continue
+                for ((mi, code) in methods(buf.getInt(o + 24))) {
+                    val steps = ArrayList<String>()
+                    var hit = false
+                    trace(code, full = true) { st ->
+                        if (st.startsWith(target)) { hit = true; steps += st.removePrefix("android.") }
+                        else if (st.startsWith("\"")) steps += st
+                    }
+                    if (hit) out += "${pretty(cls)}.${methodName(mi)}: " + steps.take(30).joinToString(" | ")
+                }
+            }
+            return out.take(60)
+        }
+
+        private fun valueText(): String {
+            val head = b[pos++].toInt() and 0xFF
+            val type = head and 0x1F
+            val arg = head shr 5
+            fun num(): Long { var v = 0L; for (k in 0..arg) v = v or ((b[pos + k].toLong() and 0xFF) shl (8 * k)); pos += arg + 1; return v }
+            return when (type) {
+                0x00, 0x02, 0x03, 0x04, 0x06 -> {
+                    var v = num(); val bits = 8 * (arg + 1)
+                    if (type != 0x03 && bits < 64 && (v shr (bits - 1)) and 1L == 1L) v = v or (-1L shl bits)
+                    v.toString()
+                }
+                0x17 -> "\"" + string(num().toInt()) + "\""
+                0x18 -> pretty(type(num().toInt()))
+                0x10, 0x11, 0x15, 0x16, 0x19, 0x1A, 0x1B -> { num(); "…" }
+                0x1C -> { val n = uleb(); repeat(n) { valueText() }; "[…]" }
+                0x1D -> { uleb(); val n = uleb(); repeat(n) { uleb(); valueText() }; "@…" }
+                0x1E -> "null"
+                0x1F -> (arg != 0).toString()
+                else -> "?"
+            }
         }
 
         fun interfaces(apk: String): List<Iface> {
