@@ -21,7 +21,7 @@ import kotlin.coroutines.resume
 object ServiceInspector {
     val packages = listOf("com.hcn.mediaservice", "com.hcn.autosource", "com.hcn.autocan", "com.hcn.AutoMediaPlayer")
 
-    data class Svc(val component: String, val exported: Boolean, val permission: String?, val descriptor: String?)
+    data class Svc(val component: String, val exported: Boolean, val permission: String?, val descriptor: String?, val permissionState: String? = null)
     data class Pkg(val pkg: String, val installed: Boolean, val services: List<Svc>, val interfaces: List<String>, val methods: List<String>)
 
     private val methodLike = Regex("^[a-z][A-Za-z0-9]{4,40}$")
@@ -36,10 +36,29 @@ object ServiceInspector {
         val services = info.services.orEmpty().map { si ->
             val cn = ComponentName(si.packageName, si.name)
             val descriptor = if (si.exported) describe(context, cn) else null
-            Svc(si.name.removePrefix(pkg), si.exported, si.permission, descriptor)
+            Svc(si.name.removePrefix(pkg), si.exported, si.permission, descriptor, si.permission?.let { permissionState(context, it) })
         }
         val (ifaces, methods) = runCatching { codeNames(info.applicationInfo!!.sourceDir, pkg) }.getOrDefault(emptyList<String>() to emptyList())
         return Pkg(pkg, true, services, ifaces, methods)
+    }
+
+    /** Protection level of a permission and whether CarMusic holds it. */
+    private fun permissionState(context: Context, perm: String): String {
+        val pm = context.packageManager
+        val granted = context.checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED
+        val level = runCatching {
+            val pi = pm.getPermissionInfo(perm, 0)
+            @Suppress("DEPRECATION")
+            val base = pi.protectionLevel and android.content.pm.PermissionInfo.PROTECTION_MASK_BASE
+            val name = when (base) {
+                android.content.pm.PermissionInfo.PROTECTION_NORMAL -> "normal"
+                android.content.pm.PermissionInfo.PROTECTION_DANGEROUS -> "dangerous"
+                android.content.pm.PermissionInfo.PROTECTION_SIGNATURE -> "signature"
+                else -> "nivo $base"
+            }
+            "$name (definiše ${pi.packageName})"
+        }.getOrElse { "nije definisana na uređaju" }
+        return "zaštita: $level · CarMusic ${if (granted) "IMA dozvolu" else "NEMA dozvolu"}"
     }
 
     /** Binds without creating the service; returns its binder interface descriptor if it is running. */
@@ -101,7 +120,7 @@ object ServiceInspector {
     fun asText(list: List<Pkg>): String = buildString {
         list.forEach { p ->
             appendLine("== ${p.pkg}${if (!p.installed) " (nije instaliran)" else ""}")
-            p.services.forEach { appendLine("  servis ${it.component}  exported=${it.exported}  perm=${it.permission ?: "-"}  binder=${it.descriptor ?: "-"}") }
+            p.services.forEach { appendLine("  servis ${it.component}  exported=${it.exported}  perm=${it.permission ?: "-"} ${it.permissionState ?: ""}  binder=${it.descriptor ?: "-"}") }
             if (p.interfaces.isNotEmpty()) appendLine("  interfejsi: " + p.interfaces.joinToString(", "))
             if (p.methods.isNotEmpty()) appendLine("  metode: " + p.methods.joinToString(", "))
         }

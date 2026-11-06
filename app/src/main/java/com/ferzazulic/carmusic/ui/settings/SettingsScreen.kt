@@ -593,7 +593,8 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
             Text(p.pkg + if (!p.installed) " – nije instaliran" else "", color = t.accent, style = MaterialTheme.typography.titleMedium)
             p.services.forEach { sv ->
                 Text(
-                    "S ${sv.component}${if (sv.exported) "" else "  (zatvoren)"}${sv.permission?.let { "  [$it]" } ?: ""}\n   → ${sv.descriptor ?: "-"}",
+                    "S ${sv.component}${if (sv.exported) "" else "  (zatvoren)"}${sv.permission?.let { "  [$it]" } ?: ""}" +
+                        (sv.permissionState?.let { "\n   $it" } ?: "") + "\n   → ${sv.descriptor ?: "-"}",
                     color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace,
                 )
             }
