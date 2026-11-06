@@ -16,14 +16,51 @@ object SignalFinder {
 
     data class AppHits(val pkg: String, val label: String, val hits: List<String>)
 
+    data class Result(val apps: List<AppHits>) {
+        /** Best guesses first: media words + an action-like name, HCN / CAN apps preferred. */
+        val candidates: List<String> by lazy {
+            apps.flatMap { a -> a.hits.map { it to score(it, a.pkg) } }
+                .filter { it.second >= 3 }
+                .sortedByDescending { it.second }
+                .map { it.first }
+                .distinct()
+                .take(25)
+        }
+        /** Every action-like string, used for live listening. */
+        val actions: List<String> get() = apps.flatMap { it.hits }.filter { actionLike.matches(it) }.distinct()
+
+        fun asText(): String = buildString {
+            appendLine("CarMusic – pretraga CAN kanala")
+            apps.forEach { a ->
+                appendLine()
+                appendLine("== ${a.label} (${a.pkg}) – ${a.hits.size}")
+                a.hits.forEach { appendLine(it) }
+            }
+        }
+    }
+
+    private fun score(s: String, pkg: String): Int {
+        val l = s.lowercase()
+        var sc = 0
+        if (listOf("id3", "track", "song", "music", "media").any { l.contains(it) }) sc += 2
+        if (listOf("info", "time", "play", "curr", "num", "index").any { l.contains(it) }) sc += 1
+        if (actionLike.matches(s)) sc += 1
+        if (l.contains("action") || l.contains("intent")) sc += 1
+        if (pkg.startsWith("com.hcn.")) sc += 1
+        if (l.contains("can")) sc += 1
+        return sc
+    }
+
     private val keywords = listOf(
         "music", "media", "id3", "track", "song", "play", "audio", "mp3", "cdc", "disc",
         "source", "canbus", "can_", ".can.", "mcu", "hcn", "time", "curr",
     )
-    private val actionLike = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+){2,}$")
+    internal val actionLike = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+){2,}$")
     private val constLike = Regex("^[A-Z][A-Z0-9_]{5,}$")
 
-    fun scan(context: Context): List<AppHits> {
+    fun scan(context: Context): Result = Result(scanApps(context))
+
+    private fun scanApps(context: Context): List<AppHits> {
         val pm = context.packageManager
         val apps = pm.getInstalledApplications(0).filter { ai ->
             val p = ai.packageName.lowercase()
@@ -41,7 +78,7 @@ object SignalFinder {
                     !l.startsWith("android.support") && !l.startsWith("androidx.") && !l.startsWith("kotlin") &&
                     !l.startsWith("com.google") && !l.startsWith("java.") && !l.startsWith("org.") &&
                     !l.endsWith(".java") && !l.contains("/")
-            }.sorted().take(160)
+            }.sorted().take(600)
             AppHits(ai.packageName, pm.getApplicationLabel(ai).toString(), hits)
         }
     }

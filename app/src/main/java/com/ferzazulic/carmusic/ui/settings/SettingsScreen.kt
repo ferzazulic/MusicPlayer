@@ -423,6 +423,7 @@ private fun SwcPage(s: AppSettings, update: ((AppSettings) -> AppSettings) -> Un
 
 // --------------------------------------------------------------------------------------------- CID
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: SettingsActions) {
     val t = LocalCarTheme.current
@@ -478,34 +479,54 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
         val context = androidx.compose.ui.platform.LocalContext.current
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         var running by remember { mutableStateOf(false) }
-        var result by remember { mutableStateOf<List<com.ferzazulic.carmusic.cid.SignalFinder.AppHits>?>(null) }
+        var result by remember { mutableStateOf<com.ferzazulic.carmusic.cid.SignalFinder.Result?>(null) }
+        val listening by com.ferzazulic.carmusic.cid.SignalMonitor.running.collectAsState()
+        val log by com.ferzazulic.carmusic.cid.SignalMonitor.log.collectAsState()
         Text(
-            "Čita (ne mijenja) sistemske CAN i muzičke aplikacije head unita i izlistava nazive poruka kojima ugrađeni player " +
-                "šalje podatke CAN-boxu (npr. 'T362 00:28'). Pokreni i pošalji screenshotove liste.",
+            "1) Pokreni pretragu. 2) Pritisni 'Prisluškuj', pa otvori ugrađeni player i pusti pjesmu 20–30 s " +
+                "(dok CID pokazuje T… 00:..). 3) Vrati se ovdje i pošalji screenshot dnevnika ili 'Podijeli kao tekst'.",
             color = t.textMuted, style = MaterialTheme.typography.bodyMedium,
         )
         Spacer(Modifier.height(8.dp))
-        Chip(if (running) "Pretražujem…" else "Pokreni pretragu", running) {
-            if (!running) {
-                running = true
-                scope.launch {
-                    result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        com.ferzazulic.carmusic.cid.SignalFinder.scan(context)
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip(if (running) "Pretražujem…" else "1. Pokreni pretragu", running) {
+                if (!running) {
+                    running = true
+                    scope.launch {
+                        result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.ferzazulic.carmusic.cid.SignalFinder.scan(context)
+                        }
+                        running = false
                     }
-                    running = false
+                }
+            }
+            result?.let { r ->
+                Chip(if (listening) "Prisluškujem… (stop)" else "2. Prisluškuj 3 min", listening) {
+                    if (listening) com.ferzazulic.carmusic.cid.SignalMonitor.stop(context)
+                    else com.ferzazulic.carmusic.cid.SignalMonitor.start(context, r.actions)
+                }
+                Chip("Podijeli kao tekst", false) {
+                    val text = r.asText() + "\n\n== Dnevnik prisluškivanja\n" + log.joinToString("\n")
+                    val send = android.content.Intent(android.content.Intent.ACTION_SEND)
+                        .setType("text/plain")
+                        .putExtra(android.content.Intent.EXTRA_SUBJECT, "CarMusic CAN pretraga")
+                        .putExtra(android.content.Intent.EXTRA_TEXT, text)
+                    runCatching { context.startActivity(android.content.Intent.createChooser(send, "Podijeli").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 }
             }
         }
-        result?.let { apps ->
+        if (log.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
-            if (apps.isEmpty()) Text("Nisu pronađene CAN/muzičke sistemske aplikacije.", color = t.text, style = MaterialTheme.typography.bodyMedium)
-            apps.forEach { app ->
-                Text("${app.label} (${app.pkg}) · ${app.hits.size}", color = t.accent, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 10.dp))
-                Text(
-                    app.hits.joinToString("\n").ifEmpty { "—" },
-                    color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace,
-                )
-            }
+            Text("Dnevnik prisluškivanja", color = t.accent, style = MaterialTheme.typography.titleMedium)
+            Text(log.take(15).joinToString("\n"), color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+        }
+        result?.let { r ->
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Najvjerovatniji kandidati (${r.candidates.size}) · pregledano aplikacija: ${r.apps.size}, ukupno naziva: ${r.apps.sumOf { it.hits.size }}",
+                color = t.accent, style = MaterialTheme.typography.titleMedium,
+            )
+            Text(r.candidates.joinToString("\n").ifEmpty { "—" }, color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
         }
     }
     if (s.cidMode == CidMode.USB_SLCAN) {
