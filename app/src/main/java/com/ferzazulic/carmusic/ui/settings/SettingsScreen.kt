@@ -602,6 +602,43 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
             if (p.methods.isNotEmpty()) Text("Metode: " + p.methods.joinToString(", "), color = t.textMuted, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
         }
     }
+    SettingsCard("AIDL potpisi HCN medijskog servisa") {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        var busy by remember { mutableStateOf(false) }
+        var res by remember { mutableStateOf<List<com.ferzazulic.carmusic.cid.AidlReader.Iface>?>(null) }
+        Text(
+            "Čita iz koda medijskog servisa i ugrađenog playera tačne metode (broj, naziv, parametri) interfejsa " +
+                "IRemotePlayerService, IMediaClientThread, IMediaObserver… Samo čitanje.",
+            color = t.textMuted, style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip(if (busy) "Čitam…" else "4. Pročitaj potpise", busy) {
+                if (!busy) {
+                    busy = true
+                    scope.launch {
+                        res = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.ferzazulic.carmusic.cid.AidlReader.read(context, listOf("com.hcn.mediaservice", "com.hcn.AutoMediaPlayer", "com.hcn.autocan"))
+                        }
+                        busy = false
+                    }
+                }
+            }
+            res?.let { r ->
+                Chip("Podijeli kao tekst", false) {
+                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                        .putExtra(android.content.Intent.EXTRA_TEXT, com.ferzazulic.carmusic.cid.AidlReader.asText(r))
+                    runCatching { context.startActivity(android.content.Intent.createChooser(send, "Podijeli").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                }
+            }
+        }
+        res?.let { r ->
+            Spacer(Modifier.height(8.dp))
+            if (r.isEmpty()) Text("Nisu pronađeni interfejsi.", color = t.text, style = MaterialTheme.typography.bodyMedium)
+            Text(com.ferzazulic.carmusic.cid.AidlReader.asText(r), color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+        }
+    }
     if (s.cidMode == CidMode.USB_SLCAN) {
         SettingsCard("Napredno (CAN)") {
             SettingChoice(
