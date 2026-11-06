@@ -12,18 +12,37 @@ android {
         applicationId = "com.ferzazulic.carmusic"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        // CI run number makes every build a newer version, so it installs as an update.
+        val build = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+        versionCode = 100 + build
+        versionName = "1.2.$build"
         vectorDrawables { useSupportLibrary = true }
     }
 
+    // One stable key for every build (prepared by CI, see .github/workflows/build.yml). Previously each
+    // CI run signed with a fresh random debug key, so Android refused to install new builds as updates.
+    val keystoreFile = file(System.getenv("CARMUSIC_KEYSTORE") ?: "carmusic.keystore")
+    signingConfigs {
+        create("carmusic") {
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("CARMUSIC_KEYSTORE_PASSWORD") ?: "android"
+                keyAlias = "carmusic"
+                keyPassword = System.getenv("CARMUSIC_KEYSTORE_PASSWORD") ?: "android"
+            }
+        }
+    }
+    val signing = if (keystoreFile.exists()) signingConfigs.getByName("carmusic") else signingConfigs.getByName("debug")
+
     buildTypes {
+        debug {
+            signingConfig = signing
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the debug key so the APK can be sideloaded directly onto the head unit.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signing
         }
     }
     compileOptions {

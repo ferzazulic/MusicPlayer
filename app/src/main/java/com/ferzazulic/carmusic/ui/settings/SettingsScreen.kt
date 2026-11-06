@@ -124,7 +124,11 @@ fun SettingsScreen(
                 .fillMaxHeight()
                 .verticalScroll(rememberScrollState())
         ) {
-            Text(t.label("Postavke"), color = t.text, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(8.dp))
+            Text(t.label("Postavke"), color = t.text, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 8.dp, top = 8.dp, end = 8.dp))
+            Text(
+                "Verzija ${BuildConfig.VERSION_NAME} · raspored: ${t.base.layout.title}",
+                color = t.textMuted, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp),
+            )
             Page.entries.forEach { p ->
                 val active = p == page
                 val alpha by animateFloatAsState(if (active) 1f else 0f, tween(t.duration(250)), label = "nav")

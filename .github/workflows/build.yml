@@ -14,11 +14,31 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
-      - name: Build debug + release APK
-        run: ./gradlew --no-daemon assembleDebug assembleRelease
+      # Keep the signing key identical between builds so new APKs install as updates.
+      # Preferred: repository secret SIGNING_KEYSTORE_BASE64 (+ SIGNING_KEYSTORE_PASSWORD).
+      # Fallback: a key generated once and kept in the Actions cache.
+      - name: Restore signing key
+        uses: actions/cache@v4
+        with:
+          path: app/carmusic.keystore
+          key: carmusic-signing-key-v1
+      - name: Prepare signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > app/carmusic.keystore
+          elif [ ! -f app/carmusic.keystore ]; then
+            keytool -genkeypair -keystore app/carmusic.keystore -storepass android -keypass android \
+              -alias carmusic -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=CarMusic"
+          fi
+      - name: Build release APK
+        env:
+          CARMUSIC_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD || 'android' }}
+        run: ./gradlew --no-daemon assembleRelease
+      - name: Rename APK with version
+        run: cp app/build/outputs/apk/release/app-release.apk "CarMusic-1.2.${{ github.run_number }}.apk"
       - uses: actions/upload-artifact@v4
         with:
-          name: CarMusic-apk
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/release/*.apk
+          name: CarMusic-1.2.${{ github.run_number }}
+          path: CarMusic-1.2.${{ github.run_number }}.apk
