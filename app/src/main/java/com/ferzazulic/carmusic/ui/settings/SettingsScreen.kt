@@ -531,12 +531,31 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
             Text(log.take(15).joinToString("\n"), color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
         }
         result?.let { r ->
+            var filter by remember { mutableStateOf("") }
             Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Filter: ", color = t.text, style = MaterialTheme.typography.titleMedium)
+                BasicTextField(
+                    filter, { filter = it }, singleLine = true,
+                    textStyle = MaterialTheme.typography.titleMedium.copy(color = t.text, fontFamily = FontFamily.Monospace),
+                    cursorBrush = SolidColor(t.accent),
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(t.corner)).background(t.surfaceHigh).padding(10.dp),
+                )
+            }
+            val f = filter.trim()
+            val entries = r.entries.filter { f.isEmpty() || it.action.contains(f, true) || it.component.contains(f, true) }
+            Spacer(Modifier.height(8.dp))
+            Text("Ulazi u head unit aplikacije (${entries.size})", color = t.accent, style = MaterialTheme.typography.titleMedium)
             Text(
-                "Najvjerovatniji kandidati (${r.candidates.size}) · pregledano aplikacija: ${r.apps.size}, ukupno naziva: ${r.apps.sumOf { it.hits.size }}",
-                color = t.accent, style = MaterialTheme.typography.titleMedium,
+                entries.take(60).joinToString("\n") { "${it.kind.take(1)} ${it.action}\n   → ${it.component}" }.ifEmpty { "—" },
+                color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace,
             )
-            Text(r.candidates.joinToString("\n").ifEmpty { "—" }, color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+            if (f.isNotEmpty()) {
+                val all = r.apps.flatMap { a -> a.hits.filter { it.contains(f, true) }.map { "$it   (${a.pkg})" } }
+                Spacer(Modifier.height(8.dp))
+                Text("Nazivi koji sadrže \"$f\" (${all.size})", color = t.accent, style = MaterialTheme.typography.titleMedium)
+                Text(all.take(60).joinToString("\n"), color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+            }
         }
     }
     if (s.cidMode == CidMode.USB_SLCAN) {
