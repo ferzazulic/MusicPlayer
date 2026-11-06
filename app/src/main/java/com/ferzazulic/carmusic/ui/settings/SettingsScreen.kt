@@ -558,6 +558,49 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
             }
         }
     }
+    SettingsCard("Ispitivanje HCN servisa (dijagnostika)") {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        var busy by remember { mutableStateOf(false) }
+        var res by remember { mutableStateOf<List<com.ferzazulic.carmusic.cid.ServiceInspector.Pkg>?>(null) }
+        Text(
+            "Gleda medijski servis, menadžer izvora i CAN aplikaciju: koje servise imaju, koji interfejs nude " +
+                "i koje metode postoje u kodu. Povezuje se samo na servise koji već rade, ništa ne pokreće i ne mijenja. " +
+                "Najbolje dok ugrađeni player svira u pozadini.",
+            color = t.textMuted, style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip(if (busy) "Ispitujem…" else "3. Ispitaj servise", busy) {
+                if (!busy) {
+                    busy = true
+                    scope.launch {
+                        res = com.ferzazulic.carmusic.cid.ServiceInspector.inspect(context)
+                        busy = false
+                    }
+                }
+            }
+            res?.let { r ->
+                Chip("Podijeli kao tekst", false) {
+                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                        .putExtra(android.content.Intent.EXTRA_TEXT, com.ferzazulic.carmusic.cid.ServiceInspector.asText(r))
+                    runCatching { context.startActivity(android.content.Intent.createChooser(send, "Podijeli").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                }
+            }
+        }
+        res?.forEach { p ->
+            Spacer(Modifier.height(10.dp))
+            Text(p.pkg + if (!p.installed) " – nije instaliran" else "", color = t.accent, style = MaterialTheme.typography.titleMedium)
+            p.services.forEach { sv ->
+                Text(
+                    "S ${sv.component}${if (sv.exported) "" else "  (zatvoren)"}${sv.permission?.let { "  [$it]" } ?: ""}\n   → ${sv.descriptor ?: "-"}",
+                    color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace,
+                )
+            }
+            if (p.interfaces.isNotEmpty()) Text("Interfejsi: " + p.interfaces.joinToString(", "), color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+            if (p.methods.isNotEmpty()) Text("Metode: " + p.methods.joinToString(", "), color = t.textMuted, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+        }
+    }
     if (s.cidMode == CidMode.USB_SLCAN) {
         SettingsCard("Napredno (CAN)") {
             SettingChoice(
