@@ -11,7 +11,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -275,13 +274,24 @@ private fun CockpitShell(screen: Screen, onSelect: (Screen) -> Unit, body: @Comp
 // ----------------------------------------------------------------------------------------- GAUGE
 
 /** Parallelogram used throughout the sport layout (slanted like performance-mode graphics). */
-fun slantShape(skew: Dp = 14.dp) = GenericShape { size, density ->
-    val s = with(density) { skew.toPx() }
-    moveTo(s, 0f)
-    lineTo(size.width, 0f)
-    lineTo(size.width - s, size.height)
-    lineTo(0f, size.height)
-    close()
+fun slantShape(skew: Dp = 14.dp): Shape = SlantShape(skew)
+
+private class SlantShape(private val skew: Dp) : Shape {
+    override fun createOutline(
+        size: androidx.compose.ui.geometry.Size,
+        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+        density: androidx.compose.ui.unit.Density,
+    ): Outline {
+        val s = with(density) { skew.toPx() }
+        val path = Path().apply {
+            moveTo(s, 0f)
+            lineTo(size.width, 0f)
+            lineTo(size.width - s, size.height)
+            lineTo(0f, size.height)
+            close()
+        }
+        return Outline.Generic(path)
+    }
 }
 
 @Composable
