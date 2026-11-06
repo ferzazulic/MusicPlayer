@@ -93,6 +93,8 @@ fun MainScreen(vm: MainViewModel) {
         { vm.toggleFavorite(pb.songId) },
     )
 
+    val model = PlayerModel(pb, song, queue, settings, actions) { screen = it }
+
     CarBackground(glow = glow, playing = pb.isPlaying) {
         // Changing to a theme with another layout cross-fades the whole frame.
         AnimatedContent(
@@ -104,8 +106,7 @@ fun MainScreen(vm: MainViewModel) {
                 layout = currentLayout,
                 screen = screen,
                 onSelect = { screen = it },
-                shuffle = pb.shuffle,
-                onShuffle = { vm.toggleShuffle() },
+                m = model,
                 mini = {
                     AnimatedVisibility(
                         visible = screen != Screen.NOW_PLAYING && pb.songId != null,
@@ -128,7 +129,7 @@ fun MainScreen(vm: MainViewModel) {
                     modifier = Modifier.fillMaxSize(),
                 ) { s ->
                     when (s) {
-                        Screen.NOW_PLAYING -> FactoryNowPlaying(currentLayout, PlayerModel(pb, song, queue, settings, actions))
+                        Screen.NOW_PLAYING -> FactoryNowPlaying(currentLayout, model)
                         Screen.LIBRARY -> LibraryScreen(
                             library, pb, settings.sortOrder, scanning, settings.favorites,
                             onPlay = { list, i, shuffle -> vm.play(list, i, shuffle); if (!shuffle || i < 0) screen = Screen.NOW_PLAYING },

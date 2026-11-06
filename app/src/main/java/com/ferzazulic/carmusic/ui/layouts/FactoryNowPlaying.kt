@@ -30,7 +30,11 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -60,6 +64,8 @@ class PlayerModel(
     val queue: List<Song?>,
     val settings: AppSettings,
     val a: NowPlayingActions,
+    /** Navigate to another app screen (for layouts whose Now Playing view carries navigation keys). */
+    val navigate: (com.ferzazulic.carmusic.ui.Screen) -> Unit = {},
 ) {
     val title get() = pb.title.ifBlank { "Ništa ne svira" }
     val artist get() = pb.artist.ifBlank { "Odaberi pjesmu iz biblioteke" }
@@ -74,11 +80,17 @@ fun FactoryNowPlaying(layout: PlayerLayout, m: PlayerModel) {
         if (maxWidth < maxHeight) {
             NowPlayingScreen(m.pb, m.song, m.settings, m.a)
         } else when (layout) {
-            PlayerLayout.MIB -> MibNowPlaying(m)
-            PlayerLayout.RNS -> RnsNowPlaying(m)
+            PlayerLayout.RCD -> RcdNowPlaying(m)
+            PlayerLayout.MIB3 -> Mib3NowPlaying(m)
+            PlayerLayout.AMUNDSEN -> AmundsenNowPlaying(m)
+            PlayerLayout.SEAT -> SeatNowPlaying(m)
+            PlayerLayout.CUPRA -> CupraNowPlaying(m)
             PlayerLayout.MMI -> MmiNowPlaying(m)
+            PlayerLayout.VC -> VcNowPlaying(m)
+            PlayerLayout.PCM -> PcmNowPlaying(m)
+            PlayerLayout.CID -> CidNowPlaying(m)
             PlayerLayout.COCKPIT -> CockpitNowPlaying(m)
-            PlayerLayout.GAUGE -> GaugeNowPlaying(m)
+            PlayerLayout.DIALS -> DialsNowPlaying(m)
         }
     }
 }
@@ -88,7 +100,7 @@ fun FactoryNowPlaying(layout: PlayerLayout, m: PlayerModel) {
  * change track; the heart in the corner adds the song to favourites.
  */
 @Composable
-private fun AnimatedCover(m: PlayerModel, modifier: Modifier, shape: Shape? = null, artSize: Int = 720) {
+internal fun AnimatedCover(m: PlayerModel, modifier: Modifier, shape: Shape? = null, artSize: Int = 720) {
     val t = LocalCarTheme.current
     val direction = m.pb.direction
     var drag by remember { mutableFloatStateOf(0f) }
@@ -156,276 +168,14 @@ fun FavoriteBadge(active: Boolean, onClick: () -> Unit, modifier: Modifier = Mod
 }
 
 @Composable
-private fun repeatIcon(mode: Int) = if (mode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat
+internal fun repeatIcon(mode: Int) = if (mode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat
 
 @Composable
-private fun pressScale(source: MutableInteractionSource): Float {
+internal fun pressScale(source: MutableInteractionSource): Float {
     val t = LocalCarTheme.current
     val pressed by source.collectIsPressedAsState()
     val s by animateFloatAsState(if (pressed && t.animate) 0.9f else 1f, spring(dampingRatio = 0.5f), label = "press")
     return s
-}
-
-// =============================================================================================== MIB
-
-@Composable
-private fun MibNowPlaying(m: PlayerModel) {
-    val t = LocalCarTheme.current
-    val pb = m.pb
-    Column(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 18.dp)) {
-        Row(Modifier.weight(1f).fillMaxWidth()) {
-            Box(
-                Modifier.fillMaxHeight().aspectRatio(1f)
-                    .shadow(16.dp, RoundedCornerShape(t.corner))
-                    .border(1.dp, t.outline, RoundedCornerShape(t.corner))
-            ) { AnimatedCover(m, Modifier.fillMaxSize()) }
-            Spacer(Modifier.width(32.dp))
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
-                Text(
-                    "Memorija · ${if (pb.count > 0) "${pb.index + 1} / ${pb.count}" else "—"}",
-                    color = t.textMuted, style = MaterialTheme.typography.labelLarge,
-                )
-                Spacer(Modifier.height(6.dp))
-                MarqueeTitle(m.title, MaterialTheme.typography.headlineMedium, t.text)
-                Spacer(Modifier.height(12.dp))
-                MibInfoLine(Icons.Rounded.Person, m.artist)
-                MibInfoLine(Icons.Rounded.Album, pb.album.ifBlank { "—" })
-                Spacer(Modifier.weight(1f))
-                CarProgressBar(pb.positionMs, pb.durationMs, m.a.seekTo)
-                Row {
-                    Text(formatTime(pb.positionMs), color = t.textMuted, style = MaterialTheme.typography.labelLarge)
-                    Spacer(Modifier.weight(1f))
-                    Text(formatTime(pb.durationMs), color = t.textMuted, style = MaterialTheme.typography.labelLarge)
-                }
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        // MIB flat segmented control bar
-        val shape = RoundedCornerShape(t.corner)
-        Row(
-            Modifier.fillMaxWidth().height(if (m.settings.largeControls) 78.dp else 64.dp)
-                .clip(shape).background(t.surface.copy(alpha = 0.9f)).border(1.dp, t.outline, shape)
-        ) {
-            MibCell(Icons.Rounded.Shuffle, pb.shuffle, m.a.toggleShuffle)
-            VLine(t.outline, Modifier.padding(vertical = 12.dp))
-            MibCell(Icons.Rounded.SkipPrevious, false, m.a.previous)
-            VLine(t.outline, Modifier.padding(vertical = 12.dp))
-            MibCell(if (pb.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, true, m.a.togglePlay, filled = true)
-            VLine(t.outline, Modifier.padding(vertical = 12.dp))
-            MibCell(Icons.Rounded.SkipNext, false, m.a.next)
-            VLine(t.outline, Modifier.padding(vertical = 12.dp))
-            MibCell(repeatIcon(pb.repeatMode), pb.repeatMode != Player.REPEAT_MODE_OFF, m.a.cycleRepeat)
-        }
-    }
-}
-
-@Composable
-private fun MibInfoLine(icon: ImageVector, text: String) {
-    val t = LocalCarTheme.current
-    Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = t.textMuted, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(12.dp))
-        AnimatedContent(text, transitionSpec = { fadeIn(tween(t.duration(400))) togetherWith fadeOut(tween(t.duration(200))) }, label = "mibLine") {
-            Text(it, color = t.text, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
-@Composable
-private fun RowScope.MibCell(icon: ImageVector, active: Boolean, onClick: () -> Unit, filled: Boolean = false) {
-    val t = LocalCarTheme.current
-    val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val bg by animateColorAsState(
-        when {
-            filled && pressed -> t.accent.copy(alpha = 0.7f)
-            filled -> t.accent
-            pressed -> t.surfaceHigh
-            else -> Color.Transparent
-        }, tween(120), label = "mibCell",
-    )
-    Box(
-        Modifier.weight(if (filled) 1.4f else 1f).fillMaxHeight().background(bg)
-            .clickable(interactionSource = source, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        AnimatedContent(icon, transitionSpec = { scaleIn(tween(t.duration(220))) togetherWith scaleOut(tween(t.duration(160))) }, label = "mibIcon") {
-            Icon(it, null, tint = if (filled) t.onAccent else if (active) t.accent else t.text, modifier = Modifier.size(36.dp))
-        }
-    }
-}
-
-// =============================================================================================== RNS
-
-@Composable
-private fun RnsNowPlaying(m: PlayerModel) {
-    val t = LocalCarTheme.current
-    val pb = m.pb
-    Row(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 14.dp)) {
-        Column(Modifier.fillMaxHeight().aspectRatio(0.88f), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                Modifier.weight(1f).fillMaxWidth()
-                    .border(2.dp, t.outline, RoundedCornerShape(t.corner))
-                    .padding(4.dp)
-            ) { AnimatedCover(m, Modifier.fillMaxSize()) }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                if (pb.count > 0) "Pjesma ${pb.index + 1} od ${pb.count}" else "—",
-                color = t.textMuted, style = MaterialTheme.typography.labelLarge,
-            )
-        }
-        Spacer(Modifier.width(22.dp))
-        Column(Modifier.weight(1f).fillMaxHeight()) {
-            RnsLine(Icons.Rounded.MusicNote, m.title, highlight = true)
-            RnsLine(Icons.Rounded.Person, m.artist)
-            RnsLine(Icons.Rounded.Album, pb.album.ifBlank { "—" })
-            RnsLine(Icons.Rounded.Timer, "${formatTime(pb.positionMs)}  /  ${formatTime(pb.durationMs)}")
-            Spacer(Modifier.weight(1f))
-            CarProgressBar(pb.positionMs, pb.durationMs, m.a.seekTo)
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth().height(if (m.settings.largeControls) 70.dp else 58.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlossyKey(Modifier.weight(1f).fillMaxHeight(), active = pb.shuffle, onClick = m.a.toggleShuffle) {
-                    Text("MIX", color = if (pb.shuffle) t.accent else t.text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
-                GlossyKey(Modifier.weight(1f).fillMaxHeight(), onClick = m.a.previous) { KeyIcon(Icons.Rounded.SkipPrevious, t.text) }
-                GlossyKey(Modifier.weight(1f).fillMaxHeight(), onClick = { m.a.seekBy(-10_000) }) { KeyIcon(Icons.Rounded.FastRewind, t.text) }
-                GlossyKey(Modifier.weight(1.5f).fillMaxHeight(), active = true, onClick = m.a.togglePlay) {
-                    AnimatedContent(pb.isPlaying, transitionSpec = { scaleIn(tween(t.duration(200))) togetherWith scaleOut(tween(t.duration(150))) }, label = "rnsPlay") {
-                        KeyIcon(if (it) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, t.accent, 40.dp)
-                    }
-                }
-                GlossyKey(Modifier.weight(1f).fillMaxHeight(), onClick = { m.a.seekBy(10_000) }) { KeyIcon(Icons.Rounded.FastForward, t.text) }
-                GlossyKey(Modifier.weight(1f).fillMaxHeight(), onClick = m.a.next) { KeyIcon(Icons.Rounded.SkipNext, t.text) }
-                GlossyKey(Modifier.weight(1f).fillMaxHeight(), active = pb.repeatMode != Player.REPEAT_MODE_OFF, onClick = m.a.cycleRepeat) {
-                    Text(
-                        when (pb.repeatMode) { Player.REPEAT_MODE_ONE -> "RPT 1"; Player.REPEAT_MODE_ALL -> "RPT"; else -> "RPT" },
-                        color = if (pb.repeatMode != Player.REPEAT_MODE_OFF) t.accent else t.text,
-                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RnsLine(icon: ImageVector, text: String, highlight: Boolean = false) {
-    val t = LocalCarTheme.current
-    Column {
-        Row(Modifier.fillMaxWidth().height(if (highlight) 62.dp else 50.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = t.accent, modifier = Modifier.size(26.dp))
-            Spacer(Modifier.width(14.dp))
-            if (highlight) {
-                MarqueeTitle(text, MaterialTheme.typography.headlineSmall, t.text, modifier = Modifier.weight(1f))
-            } else {
-                AnimatedContent(text, transitionSpec = { fadeIn(tween(t.duration(350))) togetherWith fadeOut(tween(t.duration(200))) }, label = "rnsLine", modifier = Modifier.weight(1f)) {
-                    Text(it, color = t.text, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
-        HLine(t.outline.copy(alpha = 0.7f))
-    }
-}
-
-// =============================================================================================== MMI
-
-@Composable
-private fun MmiNowPlaying(m: PlayerModel) {
-    val t = LocalCarTheme.current
-    val pb = m.pb
-    Row(Modifier.fillMaxSize().padding(vertical = 4.dp)) {
-        // Track list window around the current song, like the MMI media list
-        Column(Modifier.weight(1.3f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
-            AnimatedContent(
-                targetState = pb.index,
-                transitionSpec = {
-                    val d = if (targetState >= initialState) 1 else -1
-                    (slideInVertically(tween(t.duration(380))) { it / 7 * d } + fadeIn(tween(t.duration(300)))) togetherWith
-                        (slideOutVertically(tween(t.duration(380))) { -it / 7 * d } + fadeOut(tween(t.duration(200))))
-                },
-                label = "mmiList",
-            ) { current ->
-                Column {
-                    for (offset in -3..3) {
-                        val i = current + offset
-                        val s = m.queue.getOrNull(i)
-                        if (i < 0 || i >= m.queue.size) {
-                            Spacer(Modifier.height(50.dp))
-                        } else {
-                            MmiTrackRow(i + 1, s?.title ?: "—", s?.artist.orEmpty(), offset == 0, pb.isPlaying) { m.a.playIndex(i) }
-                        }
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.width(28.dp))
-        Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                Modifier.weight(1f).aspectRatio(1f).border(1.dp, t.text.copy(alpha = 0.35f))
-            ) { AnimatedCover(m, Modifier.fillMaxSize().padding(1.dp), shape = RoundedCornerShape(0.dp)) }
-            Spacer(Modifier.height(10.dp))
-            Text(m.artist, color = t.text, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(pb.album, color = t.textMuted, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            CarProgressBar(pb.positionMs, pb.durationMs, m.a.seekTo)
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(formatTime(pb.positionMs), color = t.textMuted, style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.weight(1f))
-                MmiKey(Icons.Rounded.SkipPrevious, m.a.previous)
-                Spacer(Modifier.width(8.dp))
-                MmiKey(if (pb.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, m.a.togglePlay, accent = true)
-                Spacer(Modifier.width(8.dp))
-                MmiKey(Icons.Rounded.SkipNext, m.a.next)
-                Spacer(Modifier.weight(1f))
-                Text("-" + formatTime(m.remaining), color = t.textMuted, style = MaterialTheme.typography.labelLarge)
-            }
-        }
-    }
-}
-
-@Composable
-private fun MmiTrackRow(number: Int, title: String, artist: String, current: Boolean, playing: Boolean, onClick: () -> Unit) {
-    val t = LocalCarTheme.current
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(50.dp)
-            .then(
-                if (current) Modifier.background(Brush.horizontalGradient(listOf(t.accent, t.accent.copy(alpha = 0.55f), t.accent.copy(alpha = 0.05f))))
-                else Modifier
-            )
-            .clickable(onClick = onClick)
-            .drawBehind {
-                if (!current) drawLine(t.outline.copy(alpha = 0.6f), Offset(0f, size.height), Offset(size.width, size.height), 1f)
-            }
-            .padding(horizontal = 14.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("%02d".format(number), color = if (current) Color.White else t.textMuted, style = MaterialTheme.typography.titleMedium, modifier = Modifier.width(44.dp))
-            Text(
-                title + if (current && artist.isNotBlank()) "  ·  $artist" else "",
-                color = if (current) Color.White else t.text.copy(alpha = 0.75f),
-                style = if (current) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-            )
-            if (current) SpectrumBars(playing, Modifier.size(26.dp, 20.dp), bars = 4)
-        }
-    }
-}
-
-@Composable
-private fun MmiKey(icon: ImageVector, onClick: () -> Unit, accent: Boolean = false) {
-    val t = LocalCarTheme.current
-    val source = remember { MutableInteractionSource() }
-    val sc = pressScale(source)
-    Box(
-        Modifier.size(width = 64.dp, height = 52.dp)
-            .graphicsLayer { scaleX = sc; scaleY = sc }
-            .border(1.dp, if (accent) t.accent else t.text.copy(alpha = 0.35f))
-            .background(if (accent) t.accent.copy(alpha = 0.18f) else Color.Transparent)
-            .clickable(interactionSource = source, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { Icon(icon, null, tint = if (accent) t.accent else t.text, modifier = Modifier.size(30.dp)) }
 }
 
 // =========================================================================================== COCKPIT
@@ -503,7 +253,7 @@ private fun CoverFlowSide(song: Song?, size: Dp, offsetX: Dp, rotation: Float, o
 }
 
 @Composable
-private fun RoundKey(icon: ImageVector, onClick: () -> Unit, active: Boolean = false, size: Dp = 60.dp) {
+internal fun RoundKey(icon: ImageVector, onClick: () -> Unit, active: Boolean = false, size: Dp = 60.dp) {
     val t = LocalCarTheme.current
     val source = remember { MutableInteractionSource() }
     val sc = pressScale(source)
@@ -517,121 +267,221 @@ private fun RoundKey(icon: ImageVector, onClick: () -> Unit, active: Boolean = f
     ) { Icon(icon, null, tint = if (active) t.accent else t.text, modifier = Modifier.size(size * 0.5f)) }
 }
 
-// ============================================================================================= GAUGE
 
-private const val START_ANGLE = 135f
-private const val SWEEP = 270f
+// ============================================================================================= DIALS
 
+/**
+ * Three-dial digital cockpit (sport instrument cluster structure): small dial left (queue position),
+ * large centre dial with a numbered scale (song progress in minutes, elapsed time in the middle),
+ * information dial right (title / artist / album). Honeycomb fill when the theme uses it.
+ */
 @Composable
-private fun GaugeNowPlaying(m: PlayerModel) {
+private fun DialsNowPlaying(m: PlayerModel) {
     val t = LocalCarTheme.current
     val pb = m.pb
-    Row(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        // Digital readout, like the speed figure in a sport cockpit
-        Column(Modifier.weight(0.75f), horizontalAlignment = Alignment.End) {
-            Text(formatTime(pb.positionMs), color = t.text, fontSize = 60.sp, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.displaySmall)
-            GaugeCaption("Vrijeme")
-            Spacer(Modifier.height(14.dp))
-            Text("-" + formatTime(m.remaining), color = t.textMuted, style = MaterialTheme.typography.headlineSmall)
-            GaugeCaption("Preostalo")
-            Spacer(Modifier.height(14.dp))
-            Text(if (pb.count > 0) "${pb.index + 1}/${pb.count}" else "—", color = t.text, style = MaterialTheme.typography.headlineSmall)
-            GaugeCaption("Pjesma")
+    val animated by animateFloatAsState(m.fraction, tween(if (t.animate) 400 else 0), label = "dial")
+    val sweepIn = remember { Animatable(if (t.animate) 0f else 1f) }
+    LaunchedEffect(Unit) { sweepIn.animateTo(1f, tween(t.duration(1200), easing = FastOutSlowInEasing)) }
+    val frac = animated * sweepIn.value
+    val queueFrac = if (pb.count > 1) pb.index.toFloat() / (pb.count - 1) else 0f
+
+    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 6.dp)) {
+        Row(Modifier.fillMaxWidth()) {
+            Text("\u266A ${if (pb.count > 0) "${pb.index + 1}/${pb.count}" else "—"}", color = t.text, style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.weight(1f))
+            if (pb.shuffle) Text("MIX", color = t.accent, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
-        Spacer(Modifier.width(24.dp))
-        BoxWithConstraints(Modifier.fillMaxHeight().aspectRatio(1f), contentAlignment = Alignment.Center) {
-            Gauge(m)
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            val big = minOf(maxHeight, maxWidth * 0.42f)
+            val small = big * 0.68f
+            // red glow between the dials
+            Canvas(Modifier.fillMaxSize()) {
+                if (t.base.glow) {
+                    listOf(0.29f, 0.71f).forEach { x ->
+                        drawCircle(
+                            Brush.radialGradient(listOf(t.accent.copy(alpha = 0.5f), Color.Transparent), Offset(size.width * x, size.height * 0.5f), size.height * 0.12f),
+                            size.height * 0.12f, Offset(size.width * x, size.height * 0.5f),
+                        )
+                    }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(big * 0.06f)) {
+                // left: queue position dial
+                Box(Modifier.size(small), contentAlignment = Alignment.Center) {
+                    DialFace(queueFrac, ticks = false, labels = emptyList(), startAngle = 135f, sweep = 180f)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(if (pb.count > 0) "${pb.index + 1}" else "0", color = t.text, fontSize = 44.sp, fontWeight = FontWeight.Bold)
+                        Text("pjesma", color = t.textMuted, style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+                // centre: song progress dial
+                Box(
+                    Modifier.size(big).pointerInput(pb.durationMs) {
+                        detectTapGestures { o ->
+                            val c = Offset(size.width / 2f, size.height / 2f)
+                            var ang = Math.toDegrees(atan2((o.y - c.y).toDouble(), (o.x - c.x).toDouble())).toFloat()
+                            ang = (ang - 135f + 720f) % 360f
+                            if (ang <= 270f && pb.durationMs > 0) m.a.seekTo((ang / 270f * pb.durationMs).toLong())
+                            else m.a.togglePlay()
+                        }
+                    },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val minutes = ((pb.durationMs / 60_000L).toInt() + 1).coerceIn(2, 12)
+                    DialFace(frac, ticks = true, labels = (0..minutes).map { it.toString() }, startAngle = 135f, sweep = 270f, needle = true)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        AnimatedContent(pb.isPlaying, transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(150)) }, label = "dialState") {
+                            Icon(if (it) Icons.Rounded.PlayArrow else Icons.Rounded.Pause, null, tint = t.accent, modifier = Modifier.size(40.dp))
+                        }
+                        Text(formatTime(pb.positionMs), color = t.text, fontSize = 52.sp, fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)
+                        Text("min", color = t.textMuted, style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+                // right: info dial
+                Box(Modifier.size(small), contentAlignment = Alignment.Center) {
+                    DialFace(0f, ticks = false, labels = emptyList(), startAngle = 0f, sweep = 0f)
+                    Column(Modifier.fillMaxWidth(0.66f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        DialInfoRow(Icons.Rounded.MusicNote, m.title)
+                        HLine(t.text.copy(alpha = 0.4f), Modifier.padding(vertical = 4.dp))
+                        DialInfoRow(Icons.Rounded.Person, m.artist)
+                        HLine(t.text.copy(alpha = 0.4f), Modifier.padding(vertical = 4.dp))
+                        DialInfoRow(Icons.Rounded.Album, m.pb.album.ifBlank { "—" })
+                    }
+                }
+            }
         }
-        Spacer(Modifier.width(24.dp))
-        Column(Modifier.weight(1f)) {
-            MarqueeTitle(m.title.uppercase(), MaterialTheme.typography.headlineMedium, t.text)
-            Text(m.artist, color = t.accent, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(pb.album, color = t.textMuted, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(22.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                SlantKey(Icons.Rounded.Shuffle, m.a.toggleShuffle, active = pb.shuffle)
-                SlantKey(Icons.Rounded.SkipPrevious, m.a.previous)
-                SlantKey(if (pb.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, m.a.togglePlay, filled = true)
-                SlantKey(Icons.Rounded.SkipNext, m.a.next)
-                SlantKey(repeatIcon(pb.repeatMode), m.a.cycleRepeat, active = pb.repeatMode != Player.REPEAT_MODE_OFF)
-            }
-            if (m.settings.showVisualizer) {
-                Spacer(Modifier.height(18.dp))
-                SpectrumBars(pb.isPlaying, Modifier.fillMaxWidth().height(36.dp), bars = 24)
-            }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            SlantKey(Icons.Rounded.Shuffle, m.a.toggleShuffle, active = pb.shuffle)
+            Spacer(Modifier.width(6.dp))
+            SlantKey(repeatIcon(pb.repeatMode), m.a.cycleRepeat, active = pb.repeatMode != Player.REPEAT_MODE_OFF)
+            Spacer(Modifier.weight(1f))
+            SlantKey(Icons.Rounded.SkipPrevious, m.a.previous)
+            Spacer(Modifier.width(6.dp))
+            SlantKey(if (pb.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, m.a.togglePlay, filled = true)
+            Spacer(Modifier.width(6.dp))
+            SlantKey(Icons.Rounded.SkipNext, m.a.next)
+            Spacer(Modifier.weight(1f))
+            Text("-" + formatTime(m.remaining), color = t.text, fontSize = 30.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-private fun GaugeCaption(text: String) {
+private fun DialInfoRow(icon: ImageVector, text: String) {
     val t = LocalCarTheme.current
-    Text(text.uppercase(), color = t.accent, style = MaterialTheme.typography.labelMedium, letterSpacing = 3.sp)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = t.text, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(text, color = t.text, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }
 
-/** Tachometer-style ring: tick scale, glowing progress arc, needle tip; tap the ring to seek. */
+/** Dial: dark face (honeycomb if the theme has it), outer arc, tick ring with numbers, red progress arc. */
 @Composable
-private fun BoxWithConstraintsScope.Gauge(m: PlayerModel) {
+private fun DialFace(
+    fraction: Float,
+    ticks: Boolean,
+    labels: List<String>,
+    startAngle: Float,
+    sweep: Float,
+    needle: Boolean = false,
+) {
     val t = LocalCarTheme.current
-    val pb = m.pb
-    val animated by animateFloatAsState(m.fraction, tween(if (t.animate) 400 else 0), label = "gauge")
-    val sweepIn = remember { Animatable(if (t.animate) 0f else 1f) }
-    LaunchedEffect(Unit) { sweepIn.animateTo(1f, tween(t.duration(1100), easing = FastOutSlowInEasing)) }
-    val frac = animated * sweepIn.value
-    val d = minOf(maxWidth, maxHeight)
-    Canvas(
-        Modifier.size(d).pointerInput(pb.durationMs) {
-            detectTapGestures { o ->
-                val c = Offset(size.width / 2f, size.height / 2f)
-                var ang = Math.toDegrees(atan2((o.y - c.y).toDouble(), (o.x - c.x).toDouble())).toFloat()
-                ang = (ang - START_ANGLE + 720f) % 360f
-                if (ang <= SWEEP && pb.durationMs > 0) m.a.seekTo((ang / SWEEP * pb.durationMs).toLong())
+    val measurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.headlineSmall.copy(color = t.text, fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)
+    Canvas(Modifier.fillMaxSize()) {
+        val c = center
+        val outer = size.minDimension / 2f
+        // face
+        drawCircle(Brush.radialGradient(listOf(t.surfaceHigh, t.bgBottom), c, outer), outer, c)
+        if (t.base.pattern == com.ferzazulic.carmusic.ui.theme.BgPattern.HONEYCOMB) {
+            val r = outer * 0.055f
+            val hexH = kotlin.math.sqrt(3f) * r
+            val clip = Path().apply { addOval(androidx.compose.ui.geometry.Rect(c, outer * 0.62f)) }
+            clipPath(clip) {
+                var y = c.y - outer
+                var row = 0
+                while (y < c.y + outer) {
+                    var x = c.x - outer + if (row % 2 == 0) 0f else r * 1.5f
+                    while (x < c.x + outer) {
+                        val p = Path()
+                        for (i in 0..5) {
+                            val ang = Math.toRadians((60 * i).toDouble())
+                            val px = x + r * cos(ang).toFloat()
+                            val py = y + r * sin(ang).toFloat()
+                            if (i == 0) p.moveTo(px, py) else p.lineTo(px, py)
+                        }
+                        p.close()
+                        drawPath(p, t.accent.copy(alpha = 0.35f), style = Stroke(1.2f))
+                        x += r * 3f
+                    }
+                    y += hexH / 2
+                    row++
+                }
             }
         }
-    ) {
-        val stroke = size.minDimension * 0.045f
-        val r = size.minDimension / 2 - stroke * 2.4f
-        val c = center
-        val topLeft = Offset(c.x - r, c.y - r)
-        val arcSize = Size(r * 2, r * 2)
-        // ticks
-        for (i in 0..40) {
-            val a = Math.toRadians((START_ANGLE + SWEEP * i / 40f).toDouble())
-            val major = i % 5 == 0
-            val r1 = r + stroke * 0.9f
-            val r2 = r1 + if (major) stroke * 1.2f else stroke * 0.6f
-            val lit = i / 40f <= frac
+        // bezel
+        drawCircle(t.text.copy(alpha = 0.25f), outer - 2f, c, style = Stroke(3f))
+        drawCircle(t.text.copy(alpha = 0.08f), outer * 0.62f, c, style = Stroke(2f))
+        if (sweep > 0f) {
+            val arcR = outer * 0.93f
+            val stroke = outer * 0.05f
+            val tl = Offset(c.x - arcR, c.y - arcR)
+            val sz = androidx.compose.ui.geometry.Size(arcR * 2, arcR * 2)
+            drawArc(t.text.copy(alpha = 0.12f), startAngle, sweep, false, tl, sz, style = Stroke(stroke))
+            if (t.base.glow) drawArc(t.accent.copy(alpha = 0.3f), startAngle, sweep * fraction, false, tl, sz, style = Stroke(stroke * 2.6f))
+            drawArc(t.accent, startAngle, sweep * fraction, false, tl, sz, style = Stroke(stroke))
+        }
+        if (ticks) {
+            val n = (labels.size - 1).coerceAtLeast(1) * 5
+            for (i in 0..n) {
+                val a = Math.toRadians((startAngle + sweep * i / n).toDouble())
+                val major = i % 5 == 0
+                val r1 = outer * 0.66f
+                val r2 = r1 + if (major) outer * 0.07f else outer * 0.035f
+                val lit = i.toFloat() / n <= fraction
+                drawLine(
+                    if (lit) t.accent else t.text.copy(alpha = 0.7f),
+                    Offset(c.x + r1 * cos(a).toFloat(), c.y + r1 * sin(a).toFloat()),
+                    Offset(c.x + r2 * cos(a).toFloat(), c.y + r2 * sin(a).toFloat()),
+                    if (major) 4f else 2f,
+                )
+            }
+            labels.forEachIndexed { i, label ->
+                val a = Math.toRadians((startAngle + sweep * i / (labels.size - 1).coerceAtLeast(1)).toDouble())
+                val r = outer * 0.81f
+                val layout = measurer.measure(label, labelStyle)
+                drawText(
+                    layout,
+                    topLeft = Offset(
+                        c.x + r * cos(a).toFloat() - layout.size.width / 2f,
+                        c.y + r * sin(a).toFloat() - layout.size.height / 2f,
+                    ),
+                )
+            }
+        }
+        if (needle) {
+            val a = Math.toRadians((startAngle + sweep * fraction).toDouble())
+            val r1 = outer * 0.6f
+            val r2 = outer * 0.97f
             drawLine(
-                if (lit) t.accent else t.text.copy(alpha = if (major) 0.55f else 0.25f),
+                Color.White,
                 Offset(c.x + r1 * cos(a).toFloat(), c.y + r1 * sin(a).toFloat()),
                 Offset(c.x + r2 * cos(a).toFloat(), c.y + r2 * sin(a).toFloat()),
-                if (major) 3f else 1.5f,
+                6f, cap = StrokeCap.Round,
             )
         }
-        drawArc(t.text.copy(alpha = 0.12f), START_ANGLE, SWEEP, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Butt))
-        if (t.base.glow) drawArc(t.accent.copy(alpha = 0.25f), START_ANGLE, SWEEP * frac, false, topLeft, arcSize, style = Stroke(stroke * 2.4f))
-        drawArc(
-            Brush.sweepGradient(listOf(t.accent.copy(alpha = 0.5f), t.accent, t.accent), c),
-            START_ANGLE, SWEEP * frac, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Butt),
-        )
-        val tip = Math.toRadians((START_ANGLE + SWEEP * frac).toDouble())
-        val tipO = Offset(c.x + r * cos(tip).toFloat(), c.y + r * sin(tip).toFloat())
-        drawCircle(t.accent.copy(alpha = 0.35f), stroke * 1.4f, tipO)
-        drawCircle(Color.White, stroke * 0.55f, tipO)
-    }
-    Box(Modifier.size(d * 0.6f).clip(CircleShape).border(2.dp, t.outline, CircleShape)) {
-        AnimatedCover(m, Modifier.fillMaxSize(), shape = CircleShape)
     }
 }
 
 @Composable
-private fun SlantKey(icon: ImageVector, onClick: () -> Unit, active: Boolean = false, filled: Boolean = false) {
+internal fun SlantKey(icon: ImageVector, onClick: () -> Unit, active: Boolean = false, filled: Boolean = false) {
     val t = LocalCarTheme.current
     val source = remember { MutableInteractionSource() }
     val sc = pressScale(source)
     val shape = slantShape(12.dp)
     Box(
-        Modifier.size(width = if (filled) 96.dp else 72.dp, height = 60.dp)
+        Modifier.size(width = if (filled) 96.dp else 72.dp, height = 56.dp)
             .graphicsLayer { scaleX = sc; scaleY = sc }
             .clip(shape)
             .background(if (filled) t.accent else t.surface)
@@ -640,7 +490,7 @@ private fun SlantKey(icon: ImageVector, onClick: () -> Unit, active: Boolean = f
         contentAlignment = Alignment.Center,
     ) {
         AnimatedContent(icon, transitionSpec = { scaleIn(tween(t.duration(200))) togetherWith scaleOut(tween(t.duration(150))) }, label = "slant") {
-            Icon(it, null, tint = if (filled) t.onAccent else if (active) t.accent else t.text, modifier = Modifier.size(32.dp))
+            Icon(it, null, tint = if (filled) t.onAccent else if (active) t.accent else t.text, modifier = Modifier.size(30.dp))
         }
     }
 }

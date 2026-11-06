@@ -60,6 +60,10 @@ fun CarBackground(
             .background(Brush.verticalGradient(listOf(t.bgTop, t.bgBottom)))
     ) {
         Canvas(Modifier.fillMaxSize()) {
+            if (t.base.light) {
+                drawPattern(t.base.pattern, t.text.copy(alpha = 0.045f))
+                return@Canvas
+            }
             val w = size.width
             val h = size.height
             val r = maxOf(w, h) * 0.55f * pulse
@@ -110,6 +114,20 @@ private fun DrawScope.drawPattern(pattern: BgPattern, color: Color) {
             while (x < w) {
                 drawLine(color, Offset(x, h), Offset(x + h, 0f), 1.2f)
                 x += step
+            }
+        }
+        BgPattern.CARBON -> {
+            val step = 8f
+            var y = 0f
+            var row = 0
+            while (y < h) {
+                var x = if (row % 2 == 0) 0f else step
+                while (x < w) {
+                    drawRect(color.copy(alpha = color.alpha * 1.4f), Offset(x, y), androidx.compose.ui.geometry.Size(step, step / 2))
+                    x += step * 2
+                }
+                y += step / 2
+                row++
             }
         }
         BgPattern.HONEYCOMB -> {

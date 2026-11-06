@@ -301,15 +301,15 @@ private fun SongList(
 private fun SongRow(song: Song, current: Boolean, playing: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val t = LocalCarTheme.current
     val layout = t.base.layout
-    val listStyle = layout == PlayerLayout.MMI || layout == PlayerLayout.RNS
+    val listStyle = layout in setOf(PlayerLayout.MMI, PlayerLayout.RCD, PlayerLayout.PCM, PlayerLayout.CID, PlayerLayout.AMUNDSEN, PlayerLayout.MIB3)
     val bg by androidx.compose.animation.core.animateFloatAsState(if (current) 1f else 0f, tween(400), label = "rowBg")
     val rowShape = if (listStyle) RoundedCornerShape(0.dp) else RoundedCornerShape(t.corner + 2.dp)
-    val highlight = if (layout == PlayerLayout.MMI) {
+    val highlight = if (layout in setOf(PlayerLayout.MMI, PlayerLayout.RCD, PlayerLayout.CID)) {
         Brush.horizontalGradient(listOf(t.accent.copy(alpha = bg), t.accent.copy(alpha = 0.5f * bg), t.accent.copy(alpha = 0f)))
     } else {
         SolidColor(t.accent.copy(alpha = 0.18f * bg))
     }
-    val onHighlight = layout == PlayerLayout.MMI && current
+    val onHighlight = layout in setOf(PlayerLayout.MMI, PlayerLayout.RCD, PlayerLayout.CID) && current
     Row(
         modifier
             .fillMaxWidth()

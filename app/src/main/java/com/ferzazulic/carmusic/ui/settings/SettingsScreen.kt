@@ -609,56 +609,80 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLayoutPreview(t
     fun bar(x: Float, y: Float, bw: Float, bh: Float, c: Color) = drawRect(c, Offset(x, y), Size(bw, bh))
     fun cover(x: Float, y: Float, s: Float) = drawRect(Brush.linearGradient(listOf(theme.surfaceHigh, accent.copy(alpha = 0.7f)), Offset(x, y), Offset(x + s, y + s)), Offset(x, y), Size(s, s))
     when (theme.layout) {
-        com.ferzazulic.carmusic.ui.theme.PlayerLayout.MIB -> {
-            bar(0f, 0f, w, h * 0.1f, theme.surface); bar(0f, h * 0.1f, w, 1f, line)
-            cover(w * 0.05f, h * 0.17f, h * 0.48f)
-            val x = w * 0.05f + h * 0.55f
-            bar(x, h * 0.2f, w * 0.4f, h * 0.07f, txt); bar(x, h * 0.32f, w * 0.28f, h * 0.05f, muted); bar(x, h * 0.41f, w * 0.24f, h * 0.05f, muted)
-            bar(x, h * 0.56f, w - x - w * 0.05f, 2f, line); bar(x, h * 0.56f, (w - x) * 0.5f, 2f, accent)
-            bar(w * 0.05f, h * 0.7f, w * 0.9f, h * 0.11f, theme.surfaceHigh); bar(w * 0.42f, h * 0.7f, w * 0.16f, h * 0.11f, accent)
-            bar(0f, h * 0.86f, w, h * 0.14f, theme.surface); bar(w * 0.1f, h * 0.86f, w * 0.18f, 2f, accent)
+        com.ferzazulic.carmusic.ui.theme.PlayerLayout.RCD -> {
+            for (i in 0..2) bar(w * (0.04f + i * 0.32f), h * 0.05f, w * 0.29f, h * 0.12f, if (i == 0) Color(0xFF8A0E12) else Color.White)
+            bar(w * 0.06f, h * 0.32f, w * 0.75f, h * 0.08f, txt)
+            bar(w * 0.06f, h * 0.48f, w * 0.4f, h * 0.03f, line)
+            for (i in 0..2) bar(w * (0.3f + i * 0.14f), h * 0.58f, w * 0.12f, h * 0.1f, Color.White)
+            for (i in 0..3) bar(w * (0.03f + i * 0.24f), h * 0.8f, w * 0.22f, h * 0.14f, Color.White)
         }
-        com.ferzazulic.carmusic.ui.theme.PlayerLayout.RNS -> {
-            drawRect(Brush.verticalGradient(listOf(theme.surfaceHigh, theme.surface), 0f, h * 0.12f), size = Size(w, h * 0.12f))
-            bar(0f, h * 0.12f, w, 2f, accent)
-            cover(w * 0.04f, h * 0.18f, h * 0.45f)
-            val x = w * 0.04f + h * 0.52f
-            for (i in 0..3) { bar(x, h * (0.2f + i * 0.11f), w * (if (i == 0) 0.4f else 0.3f), h * 0.05f, if (i == 0) txt else muted); bar(x, h * (0.27f + i * 0.11f), w - x - w * 0.04f, 1f, line) }
-            for (i in 0..6) bar(x + i * (w - x - w * 0.04f) / 7f, h * 0.68f, (w - x) / 7f - 3f, h * 0.09f, if (i == 3) accent else theme.surfaceHigh)
-            for (i in 0..2) bar(w * 0.03f + i * w * 0.32f, h * 0.84f, w * 0.3f, h * 0.12f, theme.surfaceHigh)
+        com.ferzazulic.carmusic.ui.theme.PlayerLayout.MIB3 -> {
+            for (i in 0..2) bar(w * 0.02f, h * (0.1f + i * 0.14f), w * 0.08f, 2f, if (i == 1) accent else txt)
+            bar(w * 0.35f, h * 0.22f, w * 0.3f, h * 0.05f, muted); bar(w * 0.3f, h * 0.38f, w * 0.35f, h * 0.08f, txt)
+            cover(w * 0.7f, h * 0.15f, h * 0.38f)
+            bar(w * 0.15f, h * 0.62f, w * 0.78f, 2f, muted); bar(w * 0.15f, h * 0.62f, w * 0.2f, 2f, accent)
+            bar(0f, h * 0.8f, w, 3f, accent)
+        }
+        com.ferzazulic.carmusic.ui.theme.PlayerLayout.AMUNDSEN -> {
+            for (i in 0..3) { bar(w * 0.02f, h * (0.2f + i * 0.18f), w * 0.12f, 2f, txt); bar(w * 0.86f, h * (0.2f + i * 0.18f), w * 0.12f, 2f, txt) }
+            bar(w * 0.2f, h * 0.18f, w * 0.35f, h * 0.09f, txt); bar(w * 0.2f, h * 0.32f, w * 0.2f, h * 0.05f, muted)
+            cover(w * 0.6f, h * 0.16f, h * 0.36f)
+            bar(w * 0.2f, h * 0.66f, w * 0.6f, 2f, txt); bar(w * 0.2f, h * 0.66f, w * 0.1f, 3f, accent)
+            bar(w * 0.18f, h * 0.76f, w * 0.64f, h * 0.14f, theme.surfaceHigh)
+        }
+        com.ferzazulic.carmusic.ui.theme.PlayerLayout.SEAT -> {
+            bar(w * 0.35f, 0f, w * 0.3f, h * 0.1f, theme.surfaceHigh); bar(w * 0.75f, 0f, w * 0.25f, h * 0.1f, theme.surfaceHigh)
+            bar(w * 0.2f, h * 0.1f, w * 0.15f, 2f, accent); bar(w * 0.65f, h * 0.1f, w * 0.1f, 2f, accent)
+            bar(w * 0.08f, h * 0.2f, w * 0.5f, h * 0.12f, theme.surface)
+            bar(w * 0.25f, h * 0.45f, w * 0.33f, h * 0.07f, txt); cover(w * 0.63f, h * 0.38f, h * 0.38f)
+            bar(w * 0.35f, h * 0.9f, w * 0.3f, h * 0.1f, theme.surfaceHigh)
+        }
+        com.ferzazulic.carmusic.ui.theme.PlayerLayout.CUPRA -> {
+            drawRoundRect(theme.surface, Offset(w * 0.02f, h * 0.15f), Size(w * 0.14f, h * 0.6f), CornerRadius(8f))
+            cover(w * 0.25f, h * 0.2f, h * 0.38f)
+            bar(w * 0.55f, h * 0.28f, w * 0.25f, h * 0.06f, txt); bar(w * 0.55f, h * 0.38f, w * 0.18f, h * 0.04f, muted)
+            bar(w * 0.25f, h * 0.7f, w * 0.65f, 2f, txt); drawCircle(txt, 5f, Offset(w * 0.45f, h * 0.7f))
         }
         com.ferzazulic.carmusic.ui.theme.PlayerLayout.MMI -> {
-            bar(w * 0.05f, h * 0.06f, w * 0.2f, h * 0.05f, muted); bar(0f, h * 0.14f, w, 1f, txt.copy(alpha = 0.4f))
-            for (i in 0..6) {
-                val y = h * (0.22f + i * 0.085f)
-                if (i == 3) drawRect(Brush.horizontalGradient(listOf(accent, accent.copy(alpha = 0f)), 0f, w * 0.55f), Offset(w * 0.04f, y), Size(w * 0.52f, h * 0.075f))
-                else bar(w * 0.06f, y + h * 0.025f, w * 0.36f, h * 0.03f, muted)
-            }
-            cover(w * 0.62f, h * 0.24f, h * 0.48f)
-            listOf(Offset(4f, h * 0.18f), Offset(w - 4f, h * 0.18f), Offset(4f, h * 0.94f), Offset(w - 4f, h * 0.94f)).forEach {
-                drawLine(accent, it, Offset(it.x + if (it.x < w / 2) 14f else -14f, it.y), 2f)
-            }
+            listOf(0.04f, 0.72f).forEach { x -> bar(w * x, h * 0.12f, w * 0.24f, 2f, accent); bar(w * x, h * 0.86f, w * 0.24f, 2f, accent) }
+            bar(w * 0.42f, h * 0.04f, w * 0.16f, h * 0.06f, accent)
+            for (i in 0..4) if (i == 2) drawRoundRect(accent, Offset(w * 0.15f, h * (0.25f + i * 0.11f)), Size(w * 0.72f, h * 0.09f), CornerRadius(6f), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+                else bar(w * 0.18f, h * (0.28f + i * 0.11f), w * 0.5f, h * 0.03f, txt)
+        }
+        com.ferzazulic.carmusic.ui.theme.PlayerLayout.VC -> {
+            drawRoundRect(accent, Offset(w * 0.38f, h * 0.03f), Size(w * 0.24f, h * 0.1f), CornerRadius(2f), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+            bar(w * 0.42f, h * 0.18f, w * 0.16f, h * 0.04f, accent)
+            bar(w * 0.25f, h * 0.3f, w * 0.25f, h * 0.06f, txt); bar(w * 0.25f, h * 0.4f, w * 0.18f, h * 0.04f, muted)
+            bar(w * 0.25f, h * 0.52f, w * 0.3f, 3f, accent); cover(w * 0.6f, h * 0.27f, h * 0.3f)
+            drawCircle(muted, h * 0.16f, Offset(w * 0.13f, h * 0.78f), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+            drawCircle(muted, h * 0.16f, Offset(w * 0.87f, h * 0.78f), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+        }
+        com.ferzazulic.carmusic.ui.theme.PlayerLayout.PCM -> {
+            bar(w * 0.03f, h * 0.04f, w * 0.15f, h * 0.08f, theme.surfaceHigh); bar(w * 0.19f, h * 0.04f, w * 0.15f, h * 0.08f, theme.surface)
+            cover(w * 0.04f, h * 0.18f, h * 0.2f); bar(w * 0.04f, h * 0.48f, w * 0.3f, h * 0.05f, accent); bar(w * 0.04f, h * 0.56f, w * 0.25f, h * 0.05f, accent)
+            bar(w * 0.04f, h * 0.72f, w * 0.45f, 3f, accent)
+            for (i in 0..3) bar(w * 0.58f, h * (0.15f + i * 0.17f), w * 0.38f, h * 0.13f, if (i == 3) accent else theme.surfaceHigh)
+        }
+        com.ferzazulic.carmusic.ui.theme.PlayerLayout.CID -> {
+            bar(0f, 0f, w * 0.45f, h * 0.12f, accent); bar(w * 0.46f, 0f, w * 0.27f, h * 0.12f, Color(0xFFA8A8A8)); bar(w * 0.74f, 0f, w * 0.26f, h * 0.12f, Color(0xFFA8A8A8))
+            bar(w * 0.3f, h * 0.42f, w * 0.4f, h * 0.1f, txt)
+            bar(0f, h * 0.86f, w, h * 0.14f, Color(0xFFBDBDBD))
         }
         com.ferzazulic.carmusic.ui.theme.PlayerLayout.COCKPIT -> {
-            bar(0f, 0f, w * 0.1f, h, theme.bgBottom); bar(w * 0.1f, 0f, 1f, h, line); bar(0f, h * 0.2f, 3f, h * 0.12f, accent)
+            bar(0f, 0f, w * 0.1f, h, theme.bgBottom)
             val s = h * 0.5f
-            drawRect(theme.surfaceHigh.copy(alpha = 0.6f), Offset(w * 0.2f, h * 0.14f), Size(s * 0.7f, s * 0.7f))
-            drawRect(theme.surfaceHigh.copy(alpha = 0.6f), Offset(w * 0.95f - s * 0.7f, h * 0.14f), Size(s * 0.7f, s * 0.7f))
-            cover(w * 0.55f - s / 2, h * 0.06f, s)
-            bar(w * 0.35f, h * 0.62f, w * 0.4f, h * 0.06f, txt); bar(w * 0.4f, h * 0.71f, w * 0.3f, h * 0.04f, muted)
-            bar(w * 0.18f, h * 0.8f, w * 0.74f, 2f, line); bar(w * 0.18f, h * 0.8f, w * 0.4f, 2f, accent)
-            drawCircle(accent, h * 0.06f, Offset(w * 0.55f, h * 0.9f))
+            cover(w * 0.55f - s / 2, h * 0.08f, s)
+            bar(w * 0.35f, h * 0.65f, w * 0.4f, h * 0.06f, txt)
+            drawCircle(accent, h * 0.06f, Offset(w * 0.55f, h * 0.88f))
         }
-        com.ferzazulic.carmusic.ui.theme.PlayerLayout.GAUGE -> {
-            bar(0f, 0f, w * 0.4f, h * 0.1f, accent)
+        com.ferzazulic.carmusic.ui.theme.PlayerLayout.DIALS -> {
             val c = Offset(w * 0.5f, h * 0.48f)
-            val r = h * 0.3f
-            drawArc(txt.copy(alpha = 0.2f), 135f, 270f, false, Offset(c.x - r, c.y - r), Size(r * 2, r * 2), style = androidx.compose.ui.graphics.drawscope.Stroke(5f))
-            drawArc(accent, 135f, 170f, false, Offset(c.x - r, c.y - r), Size(r * 2, r * 2), style = androidx.compose.ui.graphics.drawscope.Stroke(5f))
-            drawCircle(Brush.linearGradient(listOf(theme.surfaceHigh, accent.copy(alpha = 0.7f))), r * 0.62f, c)
-            bar(w * 0.05f, h * 0.35f, w * 0.18f, h * 0.1f, txt); bar(w * 0.08f, h * 0.5f, w * 0.12f, h * 0.05f, muted)
-            bar(w * 0.76f, h * 0.35f, w * 0.2f, h * 0.06f, txt); bar(w * 0.76f, h * 0.46f, w * 0.14f, h * 0.05f, accent)
-            for (i in 0..2) bar(w * 0.22f + i * w * 0.19f, h * 0.86f, w * 0.17f, h * 0.1f, if (i == 0) accent else theme.surfaceHigh)
+            val r = h * 0.36f
+            drawCircle(theme.surfaceHigh, r, c)
+            drawArc(accent, 135f, 180f, false, Offset(c.x - r, c.y - r), Size(r * 2, r * 2), style = androidx.compose.ui.graphics.drawscope.Stroke(5f))
+            drawCircle(theme.surfaceHigh, r * 0.6f, Offset(w * 0.16f, h * 0.5f)); drawCircle(theme.surfaceHigh, r * 0.6f, Offset(w * 0.84f, h * 0.5f))
+            drawCircle(accent.copy(alpha = 0.6f), r * 0.6f, Offset(w * 0.16f, h * 0.5f), style = androidx.compose.ui.graphics.drawscope.Stroke(3f))
         }
     }
+
 }
