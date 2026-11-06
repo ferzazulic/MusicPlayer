@@ -239,6 +239,7 @@ object AidlReader {
                         steps += st
                         if (targets.any { t -> st.endsWith(".$t") } && !st.contains("Stub")) hit = true
                     }
+                    if (!hit && methodName(mi) in setOf("updateMusicPlayInfo", "updateVideoPlayInfo", "attachMediaClient")) hit = true
                     if (hit && !cls.contains("\$Stub")) {
                         val compact = steps.filter { st -> st.startsWith("\"") || targets.any { t -> st.endsWith(".$t") } || st.contains("Parcel.") }
                         out += "${pretty(cls)}.${methodName(mi)}: " + compact.take(40).joinToString(" | ")

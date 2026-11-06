@@ -12,6 +12,8 @@ data class NowPlayingInfo(
     val durationMs: Long,
     val trackNumber: Int,
     val trackCount: Int,
+    val path: String = "",
+    val favorite: Boolean = false,
 )
 
 interface CidOutput {

@@ -61,6 +61,10 @@ class SettingsRepository(private val context: Context, scope: CoroutineScope) {
         val cidTx = intPreferencesKey("cid_tx")
         val cidFc = intPreferencesKey("cid_fc")
         val cidRadio = booleanPreferencesKey("cid_radio")
+        val hcnName = stringPreferencesKey("hcn_name")
+        val hcnSec = booleanPreferencesKey("hcn_sec")
+        val hcnPlay = stringPreferencesKey("hcn_play")
+        val hcnPause = stringPreferencesKey("hcn_pause")
         val favorites = stringSetPreferencesKey("favorites")
         val nightDim = booleanPreferencesKey("night_dim")
         val nightFrom = intPreferencesKey("night_from")
@@ -128,6 +132,10 @@ class SettingsRepository(private val context: Context, scope: CoroutineScope) {
             cidTxId = this[K.cidTx] ?: d.cidTxId,
             cidFcId = this[K.cidFc] ?: d.cidFcId,
             cidEmulateRadio = this[K.cidRadio] ?: d.cidEmulateRadio,
+            hcnClientName = this[K.hcnName] ?: d.hcnClientName,
+            hcnTimeInSeconds = this[K.hcnSec] ?: d.hcnTimeInSeconds,
+            hcnPlayState = this[K.hcnPlay] ?: d.hcnPlayState,
+            hcnPauseState = this[K.hcnPause] ?: d.hcnPauseState,
             favorites = this[K.favorites] ?: d.favorites,
             nightDim = this[K.nightDim] ?: d.nightDim,
             nightFrom = this[K.nightFrom] ?: d.nightFrom,
@@ -174,6 +182,10 @@ class SettingsRepository(private val context: Context, scope: CoroutineScope) {
         this[K.cidTx] = s.cidTxId
         this[K.cidFc] = s.cidFcId
         this[K.cidRadio] = s.cidEmulateRadio
+        this[K.hcnName] = s.hcnClientName
+        this[K.hcnSec] = s.hcnTimeInSeconds
+        this[K.hcnPlay] = s.hcnPlayState
+        this[K.hcnPause] = s.hcnPauseState
         this[K.favorites] = s.favorites
         this[K.nightDim] = s.nightDim
         this[K.nightFrom] = s.nightFrom

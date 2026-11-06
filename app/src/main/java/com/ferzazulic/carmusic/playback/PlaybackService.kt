@@ -154,6 +154,8 @@ class PlaybackService : MediaSessionService() {
                 durationMs = exo.duration.takeIf { it != C.TIME_UNSET } ?: 0L,
                 trackNumber = exo.currentMediaItemIndex + 1,
                 trackCount = exo.mediaItemCount,
+                path = exo.currentMediaItem?.mediaId?.toLongOrNull()?.let { app.music.library.value.song(it)?.path }.orEmpty(),
+                favorite = exo.currentMediaItem?.mediaId?.let { it in settings.favorites } == true,
             )
         )
     }

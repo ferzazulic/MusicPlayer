@@ -436,13 +436,14 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
         SettingChoice(
             "Način slanja",
             null,
-            listOf(CidMode.OFF to "Isključeno", CidMode.BROADCAST to "Head unit CAN-box", CidMode.USB_SLCAN to "USB CAN adapter (eksperimentalno)"),
+            listOf(CidMode.OFF to "Isključeno", CidMode.BROADCAST to "Head unit CAN-box", CidMode.HCN_MEDIA to "HCN medijski servis", CidMode.USB_SLCAN to "USB CAN adapter (eksperimentalno)"),
             s.cidMode,
         ) { v -> update { it.copy(cidMode = v) } }
         Text(
             when (s.cidMode) {
                 CidMode.OFF -> "Na CID se ne šalju podaci."
                 CidMode.BROADCAST -> "Šalje standardne 'metachanged' broadcaste i MediaSession podatke. Radi samo ako firmver head unita/CAN-boxa prosljeđuje podatke iz drugih aplikacija. Ako CID i dalje pokazuje 'Welcome' i jačinu zvuka, tvoj CAN-box prikazuje samo ugrađeni player – koristi USB CAN adapter."
+                CidMode.HCN_MEDIA -> "Za HCN head unite (UIS8581A, com.hcn.*): CarMusic se prijavi firmverovom medijskom servisu kao player i svake sekunde javlja broj pjesme, vrijeme, naslov i izvođača – isto kao ugrađeni player. CAN-box ih zatim prikazuje na CID-u (npr. T12 01:45). Eksperimentalno."
                 CidMode.USB_SLCAN -> "Direktno piše na MS-CAN (95,2 kbit/s, OBD pin 3 = CAN-H, pin 11 = CAN-L) preko USB CAN adaptera sa SLCAN firmverom (npr. Arduino + MCP2515 ili Lawicel). Šalje poruke kao fabrički radio (0x691 prisustvo, 0x6C1 tekst, čeka potvrdu na 0x2C1) svake sekunde, da nadjača CAN-box."
             },
             color = t.textMuted, style = MaterialTheme.typography.bodyMedium,
@@ -691,6 +692,30 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
             Spacer(Modifier.height(8.dp))
             Text("Analiza koda", color = t.accent, style = MaterialTheme.typography.titleMedium)
             Text(it, color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, maxLines = 40)
+        }
+    }
+    if (s.cidMode == CidMode.HCN_MEDIA) {
+        SettingsCard("Napredno (HCN medijski servis)") {
+            var name by remember(s.hcnClientName) { mutableStateOf(s.hcnClientName) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Ime klijenta", color = t.text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                BasicTextField(
+                    name, { name = it; update { st -> st.copy(hcnClientName = it) } }, singleLine = true,
+                    textStyle = MaterialTheme.typography.titleMedium.copy(color = t.accent, fontFamily = FontFamily.Monospace),
+                    cursorBrush = SolidColor(t.accent),
+                    modifier = Modifier.width(220.dp).clip(RoundedCornerShape(t.corner)).background(t.surfaceHigh).padding(10.dp),
+                )
+            }
+            Text("Ugrađeni player koristi \"HMediaPlayer\". Ako CID ne reaguje, probaj \"music\".", color = t.textMuted, style = MaterialTheme.typography.bodyMedium)
+            SettingSwitch("Vrijeme u sekundama", "Isključeno = milisekunde. Promijeni ako CID pokazuje pogrešno vrijeme.", s.hcnTimeInSeconds) { v -> update { it.copy(hcnTimeInSeconds = v) } }
+            SettingChoice(
+                "Oznaka stanja (play / pause)", null,
+                listOf("play|pause" to "play / pause", "playing|paused" to "playing / paused", "1|0" to "1 / 0", "PLAY|PAUSE" to "PLAY / PAUSE"),
+                "${s.hcnPlayState}|${s.hcnPauseState}",
+            ) { v -> val (pl, pa) = v.split("|"); update { it.copy(hcnPlayState = pl, hcnPauseState = pa) } }
+            Spacer(Modifier.height(6.dp))
+            val clientLog by com.ferzazulic.carmusic.cid.HcnMediaClient.log.collectAsState()
+            if (clientLog.isNotEmpty()) Text(clientLog.takeLast(8).joinToString("\n"), color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
         }
     }
     if (s.cidMode == CidMode.USB_SLCAN) {

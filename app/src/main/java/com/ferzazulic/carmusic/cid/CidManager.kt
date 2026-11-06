@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.launch
 
 /** Routes now-playing information to the car's upper colour information display (CID). */
-class CidManager(context: Context, scope: CoroutineScope, private val settings: SettingsRepository) {
+class CidManager(private val context: Context, scope: CoroutineScope, private val settings: SettingsRepository) {
 
     private val _status = MutableStateFlow("Neaktivno")
     val status: StateFlow<String> = _status
@@ -31,9 +31,10 @@ class CidManager(context: Context, scope: CoroutineScope, private val settings: 
         scope.launch {
             settings.settings.distinctUntilChangedBy { it.cidMode to it.cidSlcanBitrate }.collect { s ->
                 _status.value = when (s.cidMode) {
-                    CidMode.OFF -> { slcan.close(); "Isključeno" }
-                    CidMode.BROADCAST -> { slcan.close(); "Šaljem metadata broadcast + MediaSession" }
-                    CidMode.USB_SLCAN -> "Tražim USB CAN adapter…"
+                    CidMode.OFF -> { slcan.close(); HcnMediaClient.disconnect(context); "Isključeno" }
+                    CidMode.BROADCAST -> { slcan.close(); HcnMediaClient.disconnect(context); "Šaljem metadata broadcast + MediaSession" }
+                    CidMode.HCN_MEDIA -> { slcan.close(); "Povezujem se s HCN medijskim servisom…" }
+                    CidMode.USB_SLCAN -> { HcnMediaClient.disconnect(context); "Tražim USB CAN adapter…" }
                 }
                 dispatch(s)
             }
@@ -46,6 +47,7 @@ class CidManager(context: Context, scope: CoroutineScope, private val settings: 
                 scroll++
                 // Re-send every second: the CAN-box / radio keeps overwriting the display.
                 if (s.cidMode == CidMode.USB_SLCAN) sendUsb(s)
+                if (s.cidMode == CidMode.HCN_MEDIA) sendHcn(s)
                 _preview.value = CidFormatter.format(last, s, scroll)
             }
         }
@@ -61,11 +63,21 @@ class CidManager(context: Context, scope: CoroutineScope, private val settings: 
         when (s.cidMode) {
             CidMode.OFF -> Unit
             CidMode.BROADCAST -> broadcast.show(last, s)
+            CidMode.HCN_MEDIA -> {
+                broadcast.show(last, s)
+                sendHcn(s)
+            }
             CidMode.USB_SLCAN -> {
                 broadcast.show(last, s)
                 sendUsb(s)
             }
         }
+    }
+
+    private fun sendHcn(s: AppSettings) {
+        HcnMediaClient.onStatus = { _status.value = it }
+        HcnMediaClient.ensureConnected(context, s.hcnClientName.ifBlank { "HMediaPlayer" })
+        last?.let { HcnMediaClient.update(it, s.hcnTimeInSeconds, s.hcnPlayState, s.hcnPauseState) }
     }
 
     private fun sendUsb(s: AppSettings) {

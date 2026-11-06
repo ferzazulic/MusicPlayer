@@ -1,6 +1,6 @@
 package com.ferzazulic.carmusic.settings
 
-enum class CidMode { OFF, BROADCAST, USB_SLCAN }
+enum class CidMode { OFF, BROADCAST, HCN_MEDIA, USB_SLCAN }
 enum class AnimationLevel { FULL, REDUCED, OFF }
 enum class SortOrder { TITLE, ARTIST, ALBUM, DATE_ADDED }
 enum class CidLayout { TITLE_ARTIST, ARTIST_TITLE, TITLE_ONLY, SCROLLING }
@@ -54,6 +54,11 @@ data class AppSettings(
     val cidTxId: Int = 0x6C1,
     val cidFcId: Int = 0x2C1,
     val cidEmulateRadio: Boolean = true,
+    // HCN firmware media service (com.hcn.mediaservice)
+    val hcnClientName: String = "HMediaPlayer",
+    val hcnTimeInSeconds: Boolean = false,
+    val hcnPlayState: String = "play",
+    val hcnPauseState: String = "pause",
 
     // Extras
     val favorites: Set<String> = emptySet(),
