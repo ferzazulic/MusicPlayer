@@ -91,6 +91,7 @@ object AidlReader {
         if (sb.isNotEmpty()) entries += sb.toString()
         val kept = entries.filterNot { it.startsWith("== SOURCEINFO") && it.contains("android.app.Activity.perform") }
         fun rank(e: String) = when {
+            e.startsWith("== TRACKNO") -> -1
             e.startsWith("== SOURCEINFO") -> 0
             e.startsWith("== SS onTransact") -> 1
             e.startsWith("== SS") -> 2
@@ -131,6 +132,7 @@ object AidlReader {
                         val d = Dex(zip.getInputStream(e).use { it.readBytes() })
                         d.callersOf(prefix).forEach { appendLine("== KORISTI ($pkg) $it") }
                         d.methodsWithString("sourceinfo").take(10).forEach { appendLine("== SOURCEINFO ($pkg) $it") }
+                        d.methodsWithString("com.hcn.automediaplayer.action.ACTION_OTHER_CALLBACK").take(10).forEach { appendLine("== TRACKNO ($pkg) $it") }
                     }
                 }
             }

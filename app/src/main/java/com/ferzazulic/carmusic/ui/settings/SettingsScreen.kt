@@ -436,14 +436,14 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
         SettingChoice(
             "Način slanja",
             null,
-            listOf(CidMode.OFF to "Isključeno", CidMode.BROADCAST to "Head unit CAN-box", CidMode.HCN_MEDIA to "HCN medijski servis", CidMode.USB_SLCAN to "USB CAN adapter (eksperimentalno)"),
+            listOf(CidMode.OFF to "Isključeno", CidMode.BROADCAST to "Head unit CAN-box", CidMode.HCN_MEDIA to "HCN head unit (MediaPlayer)", CidMode.USB_SLCAN to "USB CAN adapter (eksperimentalno)"),
             s.cidMode,
         ) { v -> update { it.copy(cidMode = v) } }
         Text(
             when (s.cidMode) {
                 CidMode.OFF -> "Na CID se ne šalju podaci."
                 CidMode.BROADCAST -> "Šalje standardne 'metachanged' broadcaste i MediaSession podatke. Radi samo ako firmver head unita/CAN-boxa prosljeđuje podatke iz drugih aplikacija. Ako CID i dalje pokazuje 'Welcome' i jačinu zvuka, tvoj CAN-box prikazuje samo ugrađeni player – koristi USB CAN adapter."
-                CidMode.HCN_MEDIA -> "Za HCN head unite (UIS8581A, com.hcn.*): CarMusic se prijavi firmverovom medijskom servisu kao player i svake sekunde javlja broj pjesme, vrijeme, naslov i izvođača – isto kao ugrađeni player. CAN-box ih zatim prikazuje na CID-u (npr. T12 01:45). Eksperimentalno."
+                CidMode.HCN_MEDIA -> "Za HCN head unite (UIS8581A, com.hcn.*): uz CarMusic-ov player paralelno radi utišani Android MediaPlayer na istoj pjesmi i poziciji. Firmver iz njega čita stanje i vrijeme i šalje ih na CID (npr. T0 01:45), isto kao za ugrađeni player."
                 CidMode.USB_SLCAN -> "Direktno piše na MS-CAN (95,2 kbit/s, OBD pin 3 = CAN-H, pin 11 = CAN-L) preko USB CAN adaptera sa SLCAN firmverom (npr. Arduino + MCP2515 ili Lawicel). Šalje poruke kao fabrički radio (0x691 prisustvo, 0x6C1 tekst, čeka potvrdu na 0x2C1) svake sekunde, da nadjača CAN-box."
             },
             color = t.textMuted, style = MaterialTheme.typography.bodyMedium,
@@ -718,22 +718,6 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val c = com.ferzazulic.carmusic.cid.SourceInfoClient
             Chip("Snimi izvor u pozadini (2 min)", false) { com.ferzazulic.carmusic.cid.SignalMonitor.startSource(context) }
-            Chip("Test MediaPlayer + HCN ekran (25 s)", false) {
-                val pl = com.ferzazulic.carmusic.playback.PlayerHub.player
-                val uri = pl?.currentMediaItem?.mediaId?.toLongOrNull()?.let {
-                    android.content.ContentUris.withAppendedId(android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it)
-                }
-                if (pl == null || uri == null) c.log("Prvo pusti pjesmu u CarMusic-u")
-                else {
-                    val pos = pl.currentPosition
-                    pl.pause()
-                    context.startActivity(
-                        android.content.Intent(context, com.hcn.MediaActivity.MusicPlayerUiActivity::class.java)
-                            .putExtra(com.hcn.MediaActivity.MusicPlayerUiActivity.EXTRA_URI, uri.toString())
-                            .putExtra(com.hcn.MediaActivity.MusicPlayerUiActivity.EXTRA_POS, pos)
-                    )
-                }
-            }
             Chip("Test MediaPlayer (20 s)", false) {
                 val pl = com.ferzazulic.carmusic.playback.PlayerHub.player
                 val item = pl?.currentMediaItem

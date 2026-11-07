@@ -37,6 +37,7 @@ class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
     private lateinit var effects: AudioEffects
     private lateinit var queueStore: QueueStore
+    private lateinit var shadow: ShadowMediaPlayer
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val handler = Handler(Looper.getMainLooper())
     private val app get() = application as CarMusicApp
@@ -46,6 +47,7 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         effects = AudioEffects(this)
         queueStore = QueueStore(this)
+        shadow = ShadowMediaPlayer(this)
 
         exo = ExoPlayer.Builder(this)
             .setAudioAttributes(
@@ -63,7 +65,7 @@ class PlaybackService : MediaSessionService() {
 
         val activityIntent = PendingIntent.getActivity(
             this, 0,
-            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            Intent(this, com.hcn.MediaActivity.MusicPlayerUiActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         session = MediaSession.Builder(this, player)
@@ -88,6 +90,11 @@ class PlaybackService : MediaSessionService() {
                     saveQueue()
                 }
                 if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_IS_PLAYING_CHANGED)) savePosition()
+                if (events.containsAny(
+                        Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_IS_PLAYING_CHANGED,
+                        Player.EVENT_POSITION_DISCONTINUITY, Player.EVENT_PLAYBACK_STATE_CHANGED,
+                    )
+                ) syncShadow(events.contains(Player.EVENT_POSITION_DISCONTINUITY))
             }
         })
 
@@ -97,6 +104,11 @@ class PlaybackService : MediaSessionService() {
                 exo.skipSilenceEnabled = s.skipSilence
                 if (exo.playbackParameters.speed != s.playbackSpeed) exo.playbackParameters = PlaybackParameters(s.playbackSpeed)
                 exo.setHandleAudioBecomingNoisy(s.pauseOnDisconnect)
+                val hcn = s.cidMode == com.ferzazulic.carmusic.settings.CidMode.HCN_MEDIA
+                if (shadow.enabled != hcn) {
+                    shadow.enabled = hcn
+                    syncShadow(true)
+                }
             }
         }
         scope.launch { restoreQueue() }
@@ -106,6 +118,7 @@ class PlaybackService : MediaSessionService() {
                 if (exo.isPlaying) {
                     savePosition()
                     pushCid()
+                    syncShadow(false)
                 }
             }
         }
@@ -127,6 +140,14 @@ class PlaybackService : MediaSessionService() {
         exo.repeatMode = saved.repeat
         exo.prepare()
         if (s.autoPlayOnStart) player.play()
+    }
+
+    /** Mirrors playback into the silent MediaPlayer the HCN firmware reads (CID track time). */
+    private fun syncShadow(seeked: Boolean) {
+        val uri = exo.currentMediaItem?.mediaId?.toLongOrNull()?.let {
+            android.content.ContentUris.withAppendedId(android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it)
+        }
+        shadow.sync(uri, exo.isPlaying, exo.currentPosition, seeked)
     }
 
     private fun queueIds(): List<Long> =
@@ -284,6 +305,7 @@ class PlaybackService : MediaSessionService() {
         saveQueue()
         PlayerHub.player = null
         player.cancelFade()
+        shadow.release()
         app.cid.update(null)
         session?.release()
         session = null

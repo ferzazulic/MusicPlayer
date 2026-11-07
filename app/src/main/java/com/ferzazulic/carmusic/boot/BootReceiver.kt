@@ -17,7 +17,7 @@ class BootReceiver : BroadcastReceiver() {
                 if (app.settings.current().launchOnBoot) {
                     runCatching {
                         context.startActivity(
-                            Intent(context, MainActivity::class.java)
+                            Intent(context, com.hcn.MediaActivity.MusicPlayerUiActivity::class.java)
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 .putExtra(MainActivity.EXTRA_FROM_BOOT, true)
                         )

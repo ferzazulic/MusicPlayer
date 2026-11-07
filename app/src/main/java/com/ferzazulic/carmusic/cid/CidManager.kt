@@ -33,7 +33,7 @@ class CidManager(private val context: Context, scope: CoroutineScope, private va
                 _status.value = when (s.cidMode) {
                     CidMode.OFF -> { slcan.close(); HcnMediaClient.disconnect(context); "Isključeno" }
                     CidMode.BROADCAST -> { slcan.close(); HcnMediaClient.disconnect(context); "Šaljem metadata broadcast + MediaSession" }
-                    CidMode.HCN_MEDIA -> { slcan.close(); "Povezujem se s HCN medijskim servisom…" }
+                    CidMode.HCN_MEDIA -> { slcan.close(); HcnMediaClient.disconnect(context); "HCN: firmver čita vrijeme iz sjene MediaPlayer-a (CID: T… mm:ss)" }
                     CidMode.USB_SLCAN -> { HcnMediaClient.disconnect(context); "Tražim USB CAN adapter…" }
                 }
                 dispatch(s)
@@ -47,7 +47,6 @@ class CidManager(private val context: Context, scope: CoroutineScope, private va
                 scroll++
                 // Re-send every second: the CAN-box / radio keeps overwriting the display.
                 if (s.cidMode == CidMode.USB_SLCAN) sendUsb(s)
-                if (s.cidMode == CidMode.HCN_MEDIA) sendHcn(s)
                 _preview.value = CidFormatter.format(last, s, scroll)
             }
         }
@@ -63,10 +62,7 @@ class CidManager(private val context: Context, scope: CoroutineScope, private va
         when (s.cidMode) {
             CidMode.OFF -> Unit
             CidMode.BROADCAST -> broadcast.show(last, s)
-            CidMode.HCN_MEDIA -> {
-                broadcast.show(last, s)
-                sendHcn(s)
-            }
+            CidMode.HCN_MEDIA -> broadcast.show(last, s)
             CidMode.USB_SLCAN -> {
                 broadcast.show(last, s)
                 sendUsb(s)

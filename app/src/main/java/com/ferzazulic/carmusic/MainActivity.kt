@@ -24,7 +24,7 @@ import com.ferzazulic.carmusic.ui.MainViewModel
 import com.ferzazulic.carmusic.ui.theme.CarMusicTheme
 import com.ferzazulic.carmusic.ui.theme.CarThemes
 
-class MainActivity : ComponentActivity() {
+open class MainActivity : ComponentActivity() {
 
     private val vm: MainViewModel by viewModels()
 
