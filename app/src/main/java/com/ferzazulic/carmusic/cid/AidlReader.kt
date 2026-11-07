@@ -91,6 +91,11 @@ object AidlReader {
                         val dex = Dex(zip.getInputStream(e).use { it.readBytes() })
                         dex.parcelLayout("Landroid/sourceservice/MusicInfo;")?.let { appendLine("== PARCEL android.sourceservice.MusicInfo (${jar.name})"); append(it) }
                         val dump = if (prefix.isNotEmpty()) "" else dex.classDump(prefix)
+                        dex.methodsWithString("sourceinfo").take(25).forEach { appendLine("== SOURCEINFO (${jar.name}) $it") }
+                        dex.traceMethods("Landroid/sourceservice/SourceService;", { n ->
+                            n == "onTransact" || n.startsWith("lambda\$onTransact") || n == "onMediaStatus" || n == "onActivityStatus" ||
+                                n == "callManager" || n == "getMusicInfo" || n == "onFocusStateChange"
+                        }).forEach { appendLine("== SS ${it}") }
                         if (dump.isNotBlank()) { found = true; appendLine("== ${jar.name}/${e.name}"); append(dump) }
                     }
                 }
@@ -102,7 +107,9 @@ object AidlReader {
             runCatching {
                 ZipFile(apk).use { zip ->
                     java.util.Collections.list(zip.entries()).filter { it.name.matches(Regex("classes\\d*\\.dex")) }.forEach { e ->
-                        Dex(zip.getInputStream(e).use { it.readBytes() }).callersOf(prefix).forEach { appendLine("== KORISTI ($pkg) $it") }
+                        val d = Dex(zip.getInputStream(e).use { it.readBytes() })
+                        d.callersOf(prefix).forEach { appendLine("== KORISTI ($pkg) $it") }
+                        d.methodsWithString("sourceinfo").take(10).forEach { appendLine("== SOURCEINFO ($pkg) $it") }
                     }
                 }
             }
@@ -112,7 +119,7 @@ object AidlReader {
             ZipFile(apk).use { zip ->
                 java.util.Collections.list(zip.entries()).filter { it.name.matches(Regex("classes\\d*\\.dex")) }.forEach { e ->
                     val dex = Dex(zip.getInputStream(e).use { it.readBytes() })
-                    (dex.traceClasses("HMediaAgent") + dex.traceClasses("MediaClientObserver")).take(40).forEach { appendLine("== TRAG $it") }
+                    (dex.traceClasses("HMediaAgent") + dex.traceClasses("MediaClientObserver")).take(25).forEach { appendLine("== TRAG $it") }
                 }
             }
         }.onFailure { appendLine("trag greška: ${it.message}") }
@@ -252,6 +259,9 @@ object AidlReader {
                 val op = unit(insns + i * 2) and 0xFF
                 when (op) {
                     in 0x52..0x58 -> { val (name, t) = fieldInfo(unit(insns + (i + 1) * 2)); onStep("lese $name:$t") }
+                    0x12 -> { val v = (unit(insns + i * 2) shr 12).let { if (it >= 8) it - 16 else it }; if (full) onStep("#$v") }
+                    0x13 -> { val v = unit(insns + (i + 1) * 2).toShort().toInt(); if (full) onStep("#$v") }
+                    0x14 -> { val v = buf.getInt(insns + (i + 1) * 2); if (full) onStep("#$v") }
                     0x1a -> onStep("\"" + string(unit(insns + (i + 1) * 2)) + "\"")
                     0x1b -> onStep("\"" + string(buf.getInt(insns + (i + 1) * 2)) + "\"")
                     in 0x6e..0x72, in 0x74..0x78 -> {
@@ -386,6 +396,46 @@ object AidlReader {
                 0x1F -> (arg != 0).toString()
                 else -> "?"
             }
+        }
+
+        /** Full traces of methods that use the string constant [str] (e.g. the "sourceinfo" service name). */
+        fun methodsWithString(str: String, maxSteps: Int = 80): List<String> {
+            val out = ArrayList<String>()
+            val quoted = "\"" + str + "\""
+            for (c in 0 until classDefsSize) {
+                val o = classDefsOff + c * 32
+                val cls = type(buf.getInt(o))
+                for ((mi, code) in methods(buf.getInt(o + 24))) {
+                    val steps = ArrayList<String>()
+                    var hit = false
+                    trace(code, full = true) { st ->
+                        if (st == quoted) hit = true
+                        if (!st.startsWith("java.lang.StringBuilder") && !st.contains("Log.")) steps += st.replace("android.", "").replace("java.lang.", "")
+                    }
+                    if (hit) out += "${pretty(cls)}.${methodName(mi)}: " + steps.take(maxSteps).joinToString(" | ")
+                }
+            }
+            return out
+        }
+
+        /** Full traces of the named methods of one class. */
+        fun traceMethods(classDesc: String, names: (String) -> Boolean, maxSteps: Int = 120): List<String> {
+            val out = ArrayList<String>()
+            for (c in 0 until classDefsSize) {
+                val o = classDefsOff + c * 32
+                if (type(buf.getInt(o)) != classDesc) continue
+                for ((mi, code) in methods(buf.getInt(o + 24))) {
+                    val name = methodName(mi)
+                    if (!names(name)) continue
+                    val steps = ArrayList<String>()
+                    trace(code, full = true) { st ->
+                        if (!st.startsWith("java.lang.StringBuilder") && !st.contains("Log.") && !st.contains("Slog.")) steps += st.replace("android.", "").replace("java.lang.", "").replace("sourceservice.", "")
+                    }
+                    val (params, _) = proto(mi)
+                    out += "$name(${params.joinToString(",")}): " + steps.take(maxSteps).joinToString(" | ")
+                }
+            }
+            return out
         }
 
         /** Full step-by-step trace (strings, field reads, calls) of every method in classes whose name contains [fragment]. */
