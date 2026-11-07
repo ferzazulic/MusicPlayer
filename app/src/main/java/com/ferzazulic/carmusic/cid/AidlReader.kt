@@ -91,6 +91,8 @@ object AidlReader {
         if (sb.isNotEmpty()) entries += sb.toString()
         val kept = entries.filterNot { it.startsWith("== SOURCEINFO") && it.contains("android.app.Activity.perform") }
         fun rank(e: String) = when {
+            e.startsWith("== GMOP") -> -4
+            e.startsWith("== GMBASE") -> -3
             e.startsWith("== CIDTXT") -> -2
             e.startsWith("== TRACKNO") -> -1
             e.startsWith("== SOURCEINFO") -> 0
@@ -135,6 +137,11 @@ object AidlReader {
                         d.methodsWithString("sourceinfo").take(10).forEach { appendLine("== SOURCEINFO ($pkg) $it") }
                         d.methodsWithString("com.hcn.automediaplayer.action.ACTION_OTHER_CALLBACK", 200).take(10).forEach { appendLine("== TRACKNO ($pkg) $it") }
                         if (pkg == "com.hcn.autocan") {
+                            val musicName = Regex("(?i)music|media|usb|track|time|src|title|id3|play|text|disc|artist|song")
+                            d.traceClassMethods({ it.contains("SimpleSoft/GM/") }, { musicName.containsMatchIn(it) }, 120)
+                                .take(30).forEach { appendLine("== GMOP $it") }
+                            d.traceClassMethods({ it == "Lcom/hcn/base/CanDataBaseDecorder;" }, { musicName.containsMatchIn(it) }, 80)
+                                .take(20).forEach { appendLine("== GMBASE $it") }
                             // How the CAN app builds the CID media text ("T0 00:17") and whether it can send text.
                             d.methodsCalling("getMusicInfo").take(8).forEach { appendLine("== CIDTXT musicinfo $it") }
                             d.methodsCalling("onMusicEvent").take(8).forEach { appendLine("== CIDTXT event $it") }
@@ -488,6 +495,30 @@ object AidlReader {
                     }
                     if (hit) out += "${pretty(cls).removePrefix("com.hcn.")}.${methodName(mi)}: " + steps.take(maxSteps).joinToString(" | ")
                 }
+            }
+            return out
+        }
+
+        /** Traces of methods (by name filter) of every class whose descriptor matches [classFilter]. */
+        fun traceClassMethods(classFilter: (String) -> Boolean, names: (String) -> Boolean, maxSteps: Int): List<String> {
+            val out = ArrayList<String>()
+            for (c in 0 until classDefsSize) {
+                val o = classDefsOff + c * 32
+                val cls = type(buf.getInt(o))
+                if (!classFilter(cls)) continue
+                val all = ArrayList<String>()
+                for ((mi, code) in methods(buf.getInt(o + 24))) {
+                    val name = methodName(mi)
+                    all += name
+                    if (!names(name)) continue
+                    val steps = ArrayList<String>()
+                    trace(code, full = true) { st ->
+                        if (!st.startsWith("java.lang.StringBuilder") && !st.contains("Log.") && !st.contains("Logger"))
+                            steps += st.replace("android.", "").replace("java.lang.", "").replace("com.hcn.", "")
+                    }
+                    out += "${pretty(cls).substringAfterLast('.')}.$name(${proto(mi).first.joinToString(",")}): " + steps.take(maxSteps).joinToString(" | ")
+                }
+                out.add(0, "${pretty(cls).removePrefix("com.hcn.")} METODE: " + all.distinct().joinToString(", "))
             }
             return out
         }

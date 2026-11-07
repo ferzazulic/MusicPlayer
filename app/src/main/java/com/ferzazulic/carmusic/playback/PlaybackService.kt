@@ -116,7 +116,7 @@ class PlaybackService : MediaSessionService() {
         scope.launch {
             while (isActive) {
                 delay(1_000)
-                if (shadow.enabled && exo.isPlaying) shadow.poll()
+                if (shadow.enabled && exo.isPlaying) shadow.tick(exo.currentPosition)
             }
         }
         scope.launch {

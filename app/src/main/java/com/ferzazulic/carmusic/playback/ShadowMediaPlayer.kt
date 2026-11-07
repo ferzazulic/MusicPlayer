@@ -75,10 +75,15 @@ class ShadowMediaPlayer(private val context: Context) {
         }.onFailure { release() }
     }
 
-    /** Reading the position makes the firmware refresh the time it forwards to the CID. */
-    fun poll() {
+    /**
+     * The firmware records the MediaPlayer position only on events (start/pause/seek), so an inaudible
+     * seek to the exact playback position once a second keeps the CID clock running.
+     */
+    fun tick(positionMs: Long) {
         val p = mp ?: return
-        if (prepared) runCatching { p.currentPosition }
+        if (!prepared) return
+        wantPos = positionMs
+        runCatching { p.seekTo(positionMs.toInt()) }
     }
 
     fun release() {
