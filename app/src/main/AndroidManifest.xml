@@ -46,6 +46,13 @@
                 android:resource="@xml/usb_device_filter" />
         </activity>
 
+        <!-- Same class name as the HCN stock player screen (see MusicPlayerUiActivity). -->
+        <activity
+            android:name="com.hcn.MediaActivity.MusicPlayerUiActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density"
+            android:theme="@style/Theme.CarMusic" />
+
         <service
             android:name=".playback.PlaybackService"
             android:exported="true"

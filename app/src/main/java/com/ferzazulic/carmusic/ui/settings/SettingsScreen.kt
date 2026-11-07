@@ -718,6 +718,22 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val c = com.ferzazulic.carmusic.cid.SourceInfoClient
             Chip("Snimi izvor u pozadini (2 min)", false) { com.ferzazulic.carmusic.cid.SignalMonitor.startSource(context) }
+            Chip("Test MediaPlayer + HCN ekran (25 s)", false) {
+                val pl = com.ferzazulic.carmusic.playback.PlayerHub.player
+                val uri = pl?.currentMediaItem?.mediaId?.toLongOrNull()?.let {
+                    android.content.ContentUris.withAppendedId(android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it)
+                }
+                if (pl == null || uri == null) c.log("Prvo pusti pjesmu u CarMusic-u")
+                else {
+                    val pos = pl.currentPosition
+                    pl.pause()
+                    context.startActivity(
+                        android.content.Intent(context, com.hcn.MediaActivity.MusicPlayerUiActivity::class.java)
+                            .putExtra(com.hcn.MediaActivity.MusicPlayerUiActivity.EXTRA_URI, uri.toString())
+                            .putExtra(com.hcn.MediaActivity.MusicPlayerUiActivity.EXTRA_POS, pos)
+                    )
+                }
+            }
             Chip("Test MediaPlayer (20 s)", false) {
                 val pl = com.ferzazulic.carmusic.playback.PlayerHub.player
                 val item = pl?.currentMediaItem

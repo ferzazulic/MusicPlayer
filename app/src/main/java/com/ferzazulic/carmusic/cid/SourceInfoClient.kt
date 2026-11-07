@@ -123,9 +123,12 @@ object SourceInfoClient {
                 if (startMs > 0) mp.seekTo(startMs.toInt())
                 mp.start()
                 log("MediaPlayer svira – pogledaj CID")
-                repeat(seconds) {
+                var last = ""
+                repeat(seconds) { sec ->
                     Thread.sleep(1000)
-                    musicInfo()
+                    val now = musicInfoText()
+                    if (now != last || sec == seconds - 1) log("MusicInfo (${sec + 1}s): $now")
+                    last = now
                 }
             } catch (t: Throwable) {
                 log("MediaPlayer greška: ${t.javaClass.simpleName}: ${t.message}")
@@ -135,6 +138,20 @@ object SourceInfoClient {
                 log("MediaPlayer test završen")
             }
         }.start()
+    }
+
+    /** getMusicInfo as text, without logging. */
+    fun musicInfoText(): String {
+        val s = service() ?: return "servis nedostupan"
+        val data = Parcel.obtain(); val reply = Parcel.obtain()
+        return try {
+            data.writeInterfaceToken(SERVICE)
+            s.transact(4, data, reply, 0)
+            reply.readException()
+            dumpParcelable(reply)
+        } catch (t: Throwable) {
+            "greška ${t.javaClass.simpleName}"
+        } finally { data.recycle(); reply.recycle() }
     }
 
     private fun call(s: IBinder, code: Int, label: String, write: (Parcel) -> Unit): Boolean? {
