@@ -104,6 +104,39 @@ object SourceInfoClient {
         } finally { data.recycle(); reply.recycle() }
     }
 
+    /**
+     * Hypothesis test: plays the current song for [seconds] through android.media.MediaPlayer (which the
+     * firmware may report to sourceinfo) and logs getMusicInfo every second.
+     */
+    fun probeMediaPlayer(context: Context, uri: android.net.Uri, startMs: Long, seconds: Int = 20) {
+        Thread {
+            val mp = android.media.MediaPlayer()
+            try {
+                log("MediaPlayer test: $uri od ${startMs / 1000}s")
+                mp.setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC).build()
+                )
+                mp.setDataSource(context.applicationContext, uri)
+                mp.prepare()
+                if (startMs > 0) mp.seekTo(startMs.toInt())
+                mp.start()
+                log("MediaPlayer svira – pogledaj CID")
+                repeat(seconds) {
+                    Thread.sleep(1000)
+                    musicInfo()
+                }
+            } catch (t: Throwable) {
+                log("MediaPlayer greška: ${t.javaClass.simpleName}: ${t.message}")
+            } finally {
+                runCatching { mp.stop() }
+                mp.release()
+                log("MediaPlayer test završen")
+            }
+        }.start()
+    }
+
     private fun call(s: IBinder, code: Int, label: String, write: (Parcel) -> Unit): Boolean? {
         val data = Parcel.obtain(); val reply = Parcel.obtain()
         return try {

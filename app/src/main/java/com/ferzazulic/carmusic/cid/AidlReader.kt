@@ -79,7 +79,28 @@ object AidlReader {
      * The firmware's system "sourceservice" (android.sourceservice.* in framework.jar): its classes,
      * method signatures and constants, plus what the stock player and the CAN app call on it.
      */
-    fun sourceService(context: Context): String = buildString {
+    fun sourceService(context: Context): String {
+        // Most useful first; Activity lifecycle reports (transaction 101) are already known and skipped.
+        val entries = ArrayList<String>()
+        val sb = StringBuilder()
+        for (line in sourceServiceRaw(context).lines()) {
+            if (line.startsWith("==") && sb.isNotEmpty()) { entries += sb.toString(); sb.clear() }
+            if (sb.isNotEmpty()) sb.append('\n')
+            sb.append(line)
+        }
+        if (sb.isNotEmpty()) entries += sb.toString()
+        val kept = entries.filterNot { it.startsWith("== SOURCEINFO") && it.contains("android.app.Activity.perform") }
+        fun rank(e: String) = when {
+            e.startsWith("== SOURCEINFO") -> 0
+            e.startsWith("== SS onTransact") -> 1
+            e.startsWith("== SS") -> 2
+            e.startsWith("== PARCEL") -> 3
+            else -> 4
+        }
+        return kept.sortedBy(::rank).joinToString("\n")
+    }
+
+    private fun sourceServiceRaw(context: Context): String = buildString {
         val prefix = "Landroid/sourceservice"
         val jars = java.io.File("/system/framework").listFiles { f -> f.name.endsWith(".jar") }.orEmpty()
             .sortedBy { if (it.name == "framework.jar") 0 else 1 }
