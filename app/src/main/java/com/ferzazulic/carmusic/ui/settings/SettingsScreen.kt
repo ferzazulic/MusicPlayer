@@ -702,7 +702,7 @@ private fun CidPage(s: AppSettings, status: String, preview: CidText, actions: S
         analysis?.let {
             Spacer(Modifier.height(8.dp))
             Text("Analiza koda", color = t.accent, style = MaterialTheme.typography.titleMedium)
-            Text(it, color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, maxLines = 60)
+            Text(it, color = t.text, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, maxLines = 200)
         }
     }
     SettingsCard("Test sistemskog izvora (sourceinfo)") {

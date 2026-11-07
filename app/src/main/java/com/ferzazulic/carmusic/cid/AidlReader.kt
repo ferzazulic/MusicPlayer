@@ -132,7 +132,9 @@ object AidlReader {
                         val d = Dex(zip.getInputStream(e).use { it.readBytes() })
                         d.callersOf(prefix).forEach { appendLine("== KORISTI ($pkg) $it") }
                         d.methodsWithString("sourceinfo").take(10).forEach { appendLine("== SOURCEINFO ($pkg) $it") }
-                        d.methodsWithString("com.hcn.automediaplayer.action.ACTION_OTHER_CALLBACK").take(10).forEach { appendLine("== TRACKNO ($pkg) $it") }
+                        d.methodsWithString("com.hcn.automediaplayer.action.ACTION_OTHER_CALLBACK", 200).take(10).forEach { appendLine("== TRACKNO ($pkg) $it") }
+                        d.parcelLayout("Lcom/hcn/media_data/notify/NotifyMediaState;")?.let { appendLine("== TRACKNO PARCEL NotifyMediaState ($pkg)"); append(it) }
+                        d.traceMethods("Lcom/hcn/media_data/notify/NotifyMediaState;", { true }, 60).take(20).forEach { appendLine("== TRACKNO NMS $it") }
                     }
                 }
             }

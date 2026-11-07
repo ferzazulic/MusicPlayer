@@ -112,6 +112,13 @@ class PlaybackService : MediaSessionService() {
             }
         }
         scope.launch { restoreQueue() }
+        // HCN CID: refresh the mirrored MediaPlayer position every second.
+        scope.launch {
+            while (isActive) {
+                delay(1_000)
+                if (shadow.enabled && exo.isPlaying) shadow.poll()
+            }
+        }
         scope.launch {
             while (isActive) {
                 delay(5_000)

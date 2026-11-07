@@ -75,6 +75,12 @@ class ShadowMediaPlayer(private val context: Context) {
         }.onFailure { release() }
     }
 
+    /** Reading the position makes the firmware refresh the time it forwards to the CID. */
+    fun poll() {
+        val p = mp ?: return
+        if (prepared) runCatching { p.currentPosition }
+    }
+
     fun release() {
         mp?.let {
             runCatching { it.reset() }
