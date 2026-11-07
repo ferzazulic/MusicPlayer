@@ -91,6 +91,7 @@ object AidlReader {
         if (sb.isNotEmpty()) entries += sb.toString()
         val kept = entries.filterNot { it.startsWith("== SOURCEINFO") && it.contains("android.app.Activity.perform") }
         fun rank(e: String) = when {
+            e.startsWith("== CIDTXT") -> -2
             e.startsWith("== TRACKNO") -> -1
             e.startsWith("== SOURCEINFO") -> 0
             e.startsWith("== SS onTransact") -> 1
@@ -133,6 +134,12 @@ object AidlReader {
                         d.callersOf(prefix).forEach { appendLine("== KORISTI ($pkg) $it") }
                         d.methodsWithString("sourceinfo").take(10).forEach { appendLine("== SOURCEINFO ($pkg) $it") }
                         d.methodsWithString("com.hcn.automediaplayer.action.ACTION_OTHER_CALLBACK", 200).take(10).forEach { appendLine("== TRACKNO ($pkg) $it") }
+                        if (pkg == "com.hcn.autocan") {
+                            // How the CAN app builds the CID media text ("T0 00:17") and whether it can send text.
+                            d.methodsCalling("getMusicInfo").take(8).forEach { appendLine("== CIDTXT musicinfo $it") }
+                            d.methodsCalling("onMusicEvent").take(8).forEach { appendLine("== CIDTXT event $it") }
+                            d.methodsWithStringMatching(Regex("(?i)T%|%0?2d:%0?2d|id3|title|song|track")).take(20).forEach { appendLine("== CIDTXT fmt $it") }
+                        }
                         d.parcelLayout("Lcom/hcn/media_data/notify/NotifyMediaState;")?.let { appendLine("== TRACKNO PARCEL NotifyMediaState ($pkg)"); append(it) }
                         d.traceMethods("Lcom/hcn/media_data/notify/NotifyMediaState;", { true }, 60).take(20).forEach { appendLine("== TRACKNO NMS $it") }
                     }
@@ -438,6 +445,48 @@ object AidlReader {
                         if (!st.startsWith("java.lang.StringBuilder") && !st.contains("Log.")) steps += st.replace("android.", "").replace("java.lang.", "")
                     }
                     if (hit) out += "${pretty(cls)}.${methodName(mi)}: " + steps.take(maxSteps).joinToString(" | ")
+                }
+            }
+            return out
+        }
+
+        /** Full traces of com.hcn methods that call a method whose "Class.name" contains [call]. */
+        fun methodsCalling(call: String, maxSteps: Int = 150): List<String> {
+            val out = ArrayList<String>()
+            for (c in 0 until classDefsSize) {
+                val o = classDefsOff + c * 32
+                val cls = type(buf.getInt(o))
+                if (!cls.startsWith("Lcom/hcn/")) continue
+                for ((mi, code) in methods(buf.getInt(o + 24))) {
+                    val steps = ArrayList<String>()
+                    var hit = false
+                    trace(code, full = true) { st ->
+                        if (st.contains(call)) hit = true
+                        if (!st.startsWith("java.lang.StringBuilder") && !st.contains("Log.") && !st.contains("Logger"))
+                            steps += st.replace("android.", "").replace("java.lang.", "").replace("com.hcn.", "")
+                    }
+                    if (hit) out += "${pretty(cls).removePrefix("com.hcn.")}.${methodName(mi)}: " + steps.take(maxSteps).joinToString(" | ")
+                }
+            }
+            return out
+        }
+
+        /** Methods using any string constant that matches [pattern] (e.g. the "T%d" display format). */
+        fun methodsWithStringMatching(pattern: Regex, maxSteps: Int = 150): List<String> {
+            val out = ArrayList<String>()
+            for (c in 0 until classDefsSize) {
+                val o = classDefsOff + c * 32
+                val cls = type(buf.getInt(o))
+                if (!cls.startsWith("Lcom/hcn/")) continue
+                for ((mi, code) in methods(buf.getInt(o + 24))) {
+                    val steps = ArrayList<String>()
+                    var hit = false
+                    trace(code, full = true) { st ->
+                        if (st.startsWith("\"") && pattern.containsMatchIn(st)) hit = true
+                        if (!st.startsWith("java.lang.StringBuilder") && !st.contains("Log.") && !st.contains("Logger"))
+                            steps += st.replace("android.", "").replace("java.lang.", "").replace("com.hcn.", "")
+                    }
+                    if (hit) out += "${pretty(cls).removePrefix("com.hcn.")}.${methodName(mi)}: " + steps.take(maxSteps).joinToString(" | ")
                 }
             }
             return out
